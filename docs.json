@@ -54,17 +54,17 @@
         {
           "anchor": "Promptrun.ai Platform",
           "href": "https://promptrun.ai",
-          "icon": "dock"
+          "icon": "layer-group"
         },
         {
           "anchor": "Community",
           "href": "https://mintlify.com/community",
-          "icon": "slack"
+          "icon": "discord"
         },
         {
           "anchor": "Contact Us",
           "href": "mailto:george@promptrun.ai",
-          "icon": "mail"
+          "icon": "envelope"
         }
       ]
     }
