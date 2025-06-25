@@ -52,9 +52,9 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
+          "anchor": "Promptrun.ai Platform",
+          "href": "https://promptrun.ai",
+          "icon": "dock"
         },
         {
           "anchor": "Community",
@@ -62,9 +62,9 @@
           "icon": "slack"
         },
         {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "Contact Us",
+          "href": "mailto:george@promptrun.ai",
+          "icon": "mail"
         }
       ]
     }
