@@ -19,14 +19,7 @@
           },
           {
             "group": "APIs",
-            "pages": [
-              "apis/chat-completion",
-              "apis/code",
-              "apis/images",
-              "apis/settings",
-              "apis/navigation",
-              "apis/reusable-snippets"
-            ]
+            "pages": ["apis/chat-completion"]
           }
         ]
       },
