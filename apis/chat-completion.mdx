@@ -1,5 +1,5 @@
 ---
-title: "Chat Completion"
+title: "Chat Completion API"
 description: "Chat Completion API"
 icon: "code"
 ---
@@ -10,23 +10,76 @@ Generate AI-powered chat completions using various language models through our O
 
 ## Overview
 
-The Chat Completions API allows you to send a conversation (list of messages) to an AI model and receive a response. This endpoint is fully compatible with OpenAI's Chat Completions API format, making it easy to integrate with existing applications.
+The Chat Completions API is designed as a standard interface for integrating Large Language Models (LLMs) into your application. It is fully compatible with OpenAI’s Chat Completions API format, making integration straightforward for teams familiar with OpenAI, Claude, or similar providers.
+
+In addition to the standard fields, Promptrun requires a `model` property in the request body. You can choose from a variety of supported models. Visit the [Models page](https://docs.promptrun.ai/models) to see all available models along with usage costs and capabilities.
 
 ## Authentication
 
-This endpoint supports two authentication methods:
+Use your API key to authenticate requests to this endpoint. You can find or create your API key in the [Promptrun dashboard](https://app.promptrun.ai).
 
-<CodeGroup>
-```bash User Authentication (Clerk JWT)
-curl -X POST https://api.promptrun.ai/v1/chat/completions \
-  -H "Authorization: Bearer <clerk_jwt_token>" \
-  -H "Content-Type: application/json"
-```
-
-```bash API Key Authentication
+```bash
 curl -X POST https://api.promptrun.ai/v1/chat/completions \
   -H "Authorization: Bearer <api_key_starting_with_ak_>" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "anthropic/claude-3.5-haiku",
+    "messages": [
+      { "role": "system", "content": "You are a helpful assistant." },
+      { "role": "user", "content": "Tell me a fun fact about space." }
+    ],
+    "temperature": 0.5,
+    "top_p": 1,
+    "stream": false
+  }'
 ```
 
-</CodeGroup>
+## Example Conversation Flow
+
+To maintain context across multiple messages, pass the full conversation history in the `messages` array.
+
+```json
+{
+  "model": "anthropic/claude-3.5-haiku",
+  "messages": [
+    { "role": "system", "content": "You are a helpful assistant." },
+    { "role": "user", "content": "Tell me a fun fact about space." },
+    {
+      "role": "assistant",
+      "content": "Sure! Did you know that Venus spins in the opposite direction to most planets?"
+    },
+    { "role": "user", "content": "Wow, why is that?" }
+  ],
+  "temperature": 0.7,
+  "top_p": 1,
+  "stream": false
+}
+```
+
+This allows the model to generate coherent responses based on the entire conversation.
+
+## Available Models
+
+For a full list of supported models and pricing information, visit: [Models](https://docs.promptrun.ai/models)
+
+## Response Format
+
+The response from the API is in the same format as OpenAI's, Claude's and Gemini's Chat Completions API. The response includes the model's response, the model's name, and the model's usage information.
+
+```json
+{
+  "id": "chatcmpl-1234567890",
+  "object": "chat.completion",
+  "created": 1715325600,
+  "model": "anthropic/claude-3.5-haiku",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Sure! Did you know that Venus spins in the opposite direction to most planets?"
+      }
+    }
+  ]
+}
+```
