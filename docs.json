@@ -20,12 +20,12 @@
           {
             "group": "APIs",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/settings",
-              "essentials/navigation",
-              "essentials/reusable-snippets"
+              "apis/chat-completion",
+              "apis/code",
+              "apis/images",
+              "apis/settings",
+              "apis/navigation",
+              "apis/reusable-snippets"
             ]
           }
         ]
