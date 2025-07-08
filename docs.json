@@ -45,9 +45,9 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Promptrun.ai Platform",
+          "anchor": "Get Started",
           "href": "https://promptrun.ai",
-          "icon": "layer-group"
+          "icon": "rocket"
         },
         {
           "anchor": "Community",
