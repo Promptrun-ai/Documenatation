@@ -1,0 +1,32 @@
+---
+title: "Chat Completion"
+description: "Chat Completion API"
+icon: "message-square-code"
+---
+
+# Chat Completions API
+
+Generate AI-powered chat completions using various language models through our OpenAI-compatible endpoint.
+
+## Overview
+
+The Chat Completions API allows you to send a conversation (list of messages) to an AI model and receive a response. This endpoint is fully compatible with OpenAI's Chat Completions API format, making it easy to integrate with existing applications.
+
+## Authentication
+
+This endpoint supports two authentication methods:
+
+<CodeGroup>
+```bash User Authentication (Clerk JWT)
+curl -X POST https://api.promptrun.ai/v1/chat/completions \
+  -H "Authorization: Bearer <clerk_jwt_token>" \
+  -H "Content-Type: application/json"
+```
+
+```bash API Key Authentication
+curl -X POST https://api.promptrun.ai/v1/chat/completions \
+  -H "Authorization: Bearer <api_key_starting_with_ak_>" \
+  -H "Content-Type: application/json"
+```
+
+</CodeGroup>
