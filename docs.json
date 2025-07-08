@@ -19,7 +19,7 @@
           },
           {
             "group": "Core Features",
-            "pages": ["apis/chat-completion"]
+            "pages": ["apis/streaming-ai"]
           }
         ]
       },
