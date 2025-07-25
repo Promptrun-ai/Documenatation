@@ -1,0 +1,746 @@
+---
+title: "Mastra Integration"
+description: "Build AI agents with dynamic, auto-updating instructions from your Promptrun dashboard using Mastra framework."
+icon: "robot"
+---
+
+## Overview
+
+The Promptrun SDK integrates seamlessly with [Mastra](https://mastra.ai), a powerful framework for building AI agents. This integration enables you to create AI agents with dynamic instructions that automatically update from your Promptrun dashboard without requiring application redeployment.
+
+## Basic Mastra Agent Setup
+
+Create a simple AI agent with dynamic instructions:
+
+```typescript
+import { Agent, Memory } from "@mastra/core";
+import { LibSQLStore } from "@mastra/memory";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrunSDK = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrunSDK.model("openai/gpt-4o");
+
+export const promptrunAgent = new Agent({
+  name: "PromptRun Agent",
+  instructions: async ({ runtimeContext }) => {
+    const instructions = await promptrunSDK.prompt({
+      projectId: "YOUR_PROJECT_ID",
+      poll: 0,
+    });
+    return instructions.prompt;
+  },
+  model,
+  memory: new Memory({
+    storage: new LibSQLStore({
+      url: ":memory:",
+    }),
+  }),
+});
+```
+
+## Auto-updating Instructions
+
+Create an agent that automatically updates its instructions in real-time:
+
+```typescript
+import { Agent, Memory } from "@mastra/core";
+import { LibSQLStore } from "@mastra/memory";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrunSDK = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+export const autoUpdatingAgent = new Agent({
+  name: "Auto-updating PromptRun Agent",
+  instructions: async ({ runtimeContext }) => {
+    const instructions = await promptrunSDK.prompt({
+      projectId: "YOUR_PROJECT_ID",
+      poll: 30000,
+      onChange: (changeEvent) => {
+        console.log(
+          `Agent instructions updated to version ${changeEvent.prompt.version}`
+        );
+        console.log("New instructions:", changeEvent.prompt.prompt);
+      },
+    });
+    return instructions.prompt;
+  },
+  model: promptrunSDK.model("openai/gpt-4o"),
+  memory: new Memory({
+    storage: new LibSQLStore({
+      url: process.env.DATABASE_URL || ":memory:",
+    }),
+  }),
+});
+```
+
+## Advanced Agent with Instruction Management
+
+Build a sophisticated agent with proper instruction lifecycle management:
+
+```typescript
+import { Agent, Memory } from "@mastra/core";
+import { LibSQLStore } from "@mastra/memory";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class MastraPromptrunAgent {
+  private agent: Agent;
+  private pollingPrompt: any;
+  private currentInstructions: string = "";
+
+  constructor(projectId: string, agentName: string) {
+    this.initializeAgent(projectId, agentName);
+  }
+
+  private async initializeAgent(projectId: string, agentName: string) {
+    const promptrunSDK = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    this.pollingPrompt = await promptrunSDK.prompt({
+      projectId,
+      poll: 30000,
+      tag: process.env.NODE_ENV === "production" ? "production" : "development",
+      onChange: (changeEvent) => {
+        console.log(`[${agentName}] Instructions updated:`, {
+          version: changeEvent.prompt.version,
+          timestamp: new Date().toISOString(),
+        });
+
+        this.currentInstructions = changeEvent.prompt.prompt;
+
+        if (changeEvent.changes.content) {
+          console.log(`[${agentName}] Instructions content updated`);
+        }
+
+        if (changeEvent.changes.temperature) {
+          console.log(
+            `[${agentName}] Temperature changed: ${changeEvent.changes.temperature.from} → ${changeEvent.changes.temperature.to}`
+          );
+        }
+      },
+      onPollingError: (error) => {
+        console.error(`[${agentName}] Failed to update instructions:`, {
+          type: error.type,
+          message: error.message,
+        });
+      },
+    });
+
+    this.currentInstructions = this.pollingPrompt.prompt;
+
+    this.agent = new Agent({
+      name: agentName,
+      instructions: async ({ runtimeContext }) => {
+        return this.currentInstructions;
+      },
+      model: promptrunSDK.model(this.pollingPrompt.model.model),
+      memory: new Memory({
+        storage: new LibSQLStore({
+          url: process.env.DATABASE_URL || ":memory:",
+        }),
+      }),
+    });
+
+    console.log(
+      `[${agentName}] Agent initialized with instructions version ${this.pollingPrompt.version}`
+    );
+  }
+
+  getAgent(): Agent {
+    return this.agent;
+  }
+
+  getCurrentInstructions(): string {
+    return this.currentInstructions;
+  }
+
+  getInstructionsStatus() {
+    return this.pollingPrompt?.getStatus();
+  }
+
+  shutdown() {
+    if (this.pollingPrompt) {
+      this.pollingPrompt.stopPolling();
+      console.log(`Agent instruction polling stopped`);
+    }
+  }
+}
+
+const dynamicAgent = new MastraPromptrunAgent(
+  "YOUR_PROJECT_ID",
+  "Customer Support Agent"
+);
+
+export const agent = dynamicAgent.getAgent();
+
+process.on("SIGINT", () => dynamicAgent.shutdown());
+```
+
+## Multi-Agent System
+
+Create multiple agents with different instruction sets:
+
+```typescript
+import { Agent, Memory } from "@mastra/core";
+import { LibSQLStore } from "@mastra/memory";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class MultiAgentSystem {
+  private agents: Map<string, Agent> = new Map();
+  private pollingPrompts: Map<string, any> = new Map();
+
+  constructor() {
+    this.setupAgents();
+  }
+
+  private async setupAgents() {
+    const promptrunSDK = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    const agentConfigs = [
+      {
+        name: "Customer Support Agent",
+        projectId: "customer-support-project-id",
+        model: "openai/gpt-4o",
+        tag: "production",
+      },
+      {
+        name: "Sales Agent",
+        projectId: "sales-agent-project-id",
+        model: "openai/gpt-4o-mini",
+        tag: "production",
+      },
+      {
+        name: "Technical Assistant",
+        projectId: "tech-assistant-project-id",
+        model: "anthropic/claude-3.5-haiku",
+        tag: "production",
+      },
+    ];
+
+    for (const config of agentConfigs) {
+      await this.createAgent(promptrunSDK, config);
+    }
+
+    console.log(
+      `Multi-agent system initialized with ${this.agents.size} agents`
+    );
+  }
+
+  private async createAgent(promptrunSDK: PromptrunSDK, config: any) {
+    const pollingPrompt = await promptrunSDK.prompt({
+      projectId: config.projectId,
+      tag: config.tag,
+      poll: 60000,
+      onChange: (changeEvent) => {
+        console.log(
+          `[${config.name}] Instructions updated to version ${changeEvent.prompt.version}`
+        );
+      },
+      onPollingError: (error) => {
+        console.error(
+          `[${config.name}] Instruction update error:`,
+          error.message
+        );
+      },
+    });
+
+    const agent = new Agent({
+      name: config.name,
+      instructions: async ({ runtimeContext }) => {
+        return pollingPrompt.prompt;
+      },
+      model: promptrunSDK.model(config.model),
+      memory: new Memory({
+        storage: new LibSQLStore({
+          url: process.env.DATABASE_URL || ":memory:",
+        }),
+      }),
+    });
+
+    this.agents.set(config.name, agent);
+    this.pollingPrompts.set(config.name, pollingPrompt);
+  }
+
+  getAgent(name: string): Agent | undefined {
+    return this.agents.get(name);
+  }
+
+  getAllAgents(): Map<string, Agent> {
+    return new Map(this.agents);
+  }
+
+  getAgentStatus(name: string) {
+    const pollingPrompt = this.pollingPrompts.get(name);
+    return {
+      exists: this.agents.has(name),
+      polling: pollingPrompt?.isPolling || false,
+      status: pollingPrompt?.getStatus(),
+    };
+  }
+
+  shutdown() {
+    console.log("Shutting down multi-agent system...");
+
+    for (const [name, pollingPrompt] of this.pollingPrompts) {
+      pollingPrompt.stopPolling();
+      console.log(`[${name}] Polling stopped`);
+    }
+
+    console.log("Multi-agent system shutdown complete");
+  }
+}
+
+const multiAgentSystem = new MultiAgentSystem();
+
+const supportAgent = multiAgentSystem.getAgent("Customer Support Agent");
+const salesAgent = multiAgentSystem.getAgent("Sales Agent");
+const techAgent = multiAgentSystem.getAgent("Technical Assistant");
+
+export {
+  supportAgent as customerSupportAgent,
+  salesAgent,
+  techAgent as technicalAssistant,
+  multiAgentSystem,
+};
+
+process.on("SIGINT", () => multiAgentSystem.shutdown());
+```
+
+## Environment-based Agent Configuration
+
+Configure agents differently for different environments:
+
+```typescript
+import { Agent, Memory } from "@mastra/core";
+import { LibSQLStore } from "@mastra/memory";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class EnvironmentAwareAgent {
+  private agent: Agent;
+  private pollingPrompt: any;
+
+  constructor(projectId: string, agentName: string) {
+    this.initializeAgent(projectId, agentName);
+  }
+
+  private async initializeAgent(projectId: string, agentName: string) {
+    const promptrunSDK = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    const environment = process.env.NODE_ENV || "development";
+    const config = this.getEnvironmentConfig(environment);
+
+    console.log(`[${agentName}] Initializing for ${environment} environment`);
+
+    this.pollingPrompt = await promptrunSDK.prompt({
+      projectId,
+      tag: config.tag,
+      poll: config.pollInterval,
+      onChange: (changeEvent) => {
+        console.log(`[${agentName}] [${environment}] Instructions updated:`, {
+          version: changeEvent.prompt.version,
+          changes: Object.keys(changeEvent.changes),
+        });
+      },
+      onPollingError: (error) => {
+        console.error(`[${agentName}] [${environment}] Error:`, error.message);
+      },
+    });
+
+    this.agent = new Agent({
+      name: `${agentName} (${environment})`,
+      instructions: async ({ runtimeContext }) => {
+        return this.pollingPrompt.prompt;
+      },
+      model: promptrunSDK.model(config.model),
+      memory: new Memory({
+        storage: new LibSQLStore({
+          url: config.databaseUrl,
+        }),
+      }),
+    });
+
+    console.log(`[${agentName}] Agent ready with ${config.tag} instructions`);
+  }
+
+  private getEnvironmentConfig(environment: string) {
+    const configs = {
+      production: {
+        tag: "production",
+        pollInterval: 300000,
+        model: "openai/gpt-4o",
+        databaseUrl: process.env.DATABASE_URL!,
+      },
+      staging: {
+        tag: "staging",
+        pollInterval: 60000,
+        model: "openai/gpt-4o",
+        databaseUrl: process.env.STAGING_DATABASE_URL || ":memory:",
+      },
+      development: {
+        tag: "development",
+        pollInterval: 10000,
+        model: "openai/gpt-4o-mini",
+        databaseUrl: ":memory:",
+      },
+      test: {
+        tag: "test",
+        pollInterval: 0,
+        model: "openai/gpt-4o-mini",
+        databaseUrl: ":memory:",
+      },
+    };
+
+    return configs[environment] || configs.development;
+  }
+
+  getAgent(): Agent {
+    return this.agent;
+  }
+
+  getStatus() {
+    return {
+      environment: process.env.NODE_ENV || "development",
+      polling: this.pollingPrompt?.isPolling || false,
+      version: this.pollingPrompt?.version,
+      status: this.pollingPrompt?.getStatus(),
+    };
+  }
+
+  shutdown() {
+    if (this.pollingPrompt) {
+      this.pollingPrompt.stopPolling();
+    }
+  }
+}
+
+const environmentAgent = new EnvironmentAwareAgent(
+  "YOUR_PROJECT_ID",
+  "Environment-Aware Agent"
+);
+
+export const agent = environmentAgent.getAgent();
+
+console.log("Agent status:", environmentAgent.getStatus());
+```
+
+## Server-Sent Events with Mastra
+
+Use SSE for ultra-fast instruction updates:
+
+```typescript
+import { Agent, Memory } from "@mastra/core";
+import { LibSQLStore } from "@mastra/memory";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class SSEMastraAgent {
+  private agent: Agent;
+  private ssePrompt: any;
+  private currentInstructions: string = "";
+
+  constructor(projectId: string, agentName: string) {
+    this.initializeAgent(projectId, agentName);
+  }
+
+  private async initializeAgent(projectId: string, agentName: string) {
+    const promptrunSDK = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    this.ssePrompt = await promptrunSDK.prompt({
+      projectId,
+      poll: "sse",
+      tag: "production",
+      onChange: (changeEvent) => {
+        console.log(`[${agentName}] Real-time instruction update:`, {
+          version: changeEvent.prompt.version,
+          timestamp: new Date().toISOString(),
+          latency: "< 1 second",
+        });
+
+        this.currentInstructions = changeEvent.prompt.prompt;
+
+        if (changeEvent.changes.content) {
+          console.log(`[${agentName}] Instructions changed instantly via SSE`);
+        }
+      },
+      onPollingError: (error) => {
+        console.error(`[${agentName}] SSE connection error:`, error.message);
+        console.log(`[${agentName}] Will attempt to reconnect...`);
+      },
+    });
+
+    this.currentInstructions = this.ssePrompt.prompt;
+
+    this.agent = new Agent({
+      name: `${agentName} (SSE)`,
+      instructions: async ({ runtimeContext }) => {
+        return this.currentInstructions;
+      },
+      model: promptrunSDK.model(this.ssePrompt.model.model),
+      memory: new Memory({
+        storage: new LibSQLStore({
+          url: process.env.DATABASE_URL || ":memory:",
+        }),
+      }),
+    });
+
+    console.log(
+      `[${agentName}] Agent initialized with SSE for instant updates`
+    );
+  }
+
+  getAgent(): Agent {
+    return this.agent;
+  }
+
+  getCurrentInstructions(): string {
+    return this.currentInstructions;
+  }
+
+  isSSEActive(): boolean {
+    return this.ssePrompt?.isPolling || false;
+  }
+
+  shutdown() {
+    if (this.ssePrompt) {
+      this.ssePrompt.stopPolling();
+      console.log("SSE connection closed");
+    }
+  }
+}
+
+const sseAgent = new SSEMastraAgent("YOUR_PROJECT_ID", "Real-time Agent");
+export const realTimeAgent = sseAgent.getAgent();
+
+console.log("SSE Active:", sseAgent.isSSEActive());
+```
+
+## Testing Agents with Dynamic Instructions
+
+Test your agents with different instruction versions:
+
+```typescript
+import { Agent, Memory } from "@mastra/core";
+import { LibSQLStore } from "@mastra/memory";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class TestableAgent {
+  private agent: Agent;
+  private promptrunSDK: PromptrunSDK;
+
+  constructor(private projectId: string, private agentName: string) {
+    this.promptrunSDK = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+  }
+
+  async createAgent(version?: string, tag?: string) {
+    const instructions = await this.promptrunSDK.prompt({
+      projectId: this.projectId,
+      version,
+      tag,
+      poll: 0,
+    });
+
+    this.agent = new Agent({
+      name: `${this.agentName} (Test)`,
+      instructions: async ({ runtimeContext }) => {
+        return instructions.prompt;
+      },
+      model: this.promptrunSDK.model(instructions.model.model),
+      memory: new Memory({
+        storage: new LibSQLStore({
+          url: ":memory:",
+        }),
+      }),
+    });
+
+    console.log(
+      `Test agent created with instructions version ${instructions.version}`
+    );
+    return this.agent;
+  }
+
+  async testWithVersion(version: string, testInput: string) {
+    const agent = await this.createAgent(version);
+    console.log(`Testing with version ${version}:`, testInput);
+    return agent;
+  }
+
+  async testWithTag(tag: string, testInput: string) {
+    const agent = await this.createAgent(undefined, tag);
+    console.log(`Testing with tag ${tag}:`, testInput);
+    return agent;
+  }
+
+  getAgent(): Agent {
+    return this.agent;
+  }
+}
+
+const testableAgent = new TestableAgent("YOUR_PROJECT_ID", "Test Agent");
+
+await testableAgent.testWithVersion("v2", "Hello, test message");
+
+await testableAgent.testWithTag("staging", "Another test message");
+```
+
+## Benefits of Promptrun + Mastra Integration
+
+<CardGroup cols={2}>
+  <Card title="Dynamic Instructions" icon="arrows-rotate">
+    Update agent behavior without redeploying your applications
+  </Card>
+  <Card title="Version Control" icon="code-branch">
+    Use specific versions or tags for different environments
+  </Card>
+  <Card title="Real-time Updates" icon="bolt">
+    Agents automatically adapt to instruction changes
+  </Card>
+  <Card title="Centralized Management" icon="sliders">
+    Manage all agent instructions from Promptrun dashboard
+  </Card>
+  <Card title="A/B Testing" icon="flask">
+    Easily test different instruction sets by updating prompts
+  </Card>
+  <Card title="Rollback Capability" icon="clock-rotate-left">
+    Quickly revert to previous instruction versions
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+### ✅ Do
+
+- Use environment-specific tags (production, staging, dev)
+- Implement proper error handling for instruction updates
+- Monitor polling status in production
+- Use SSE for applications requiring instant updates
+- Test agents with different instruction versions
+- Implement graceful shutdown procedures
+
+### ❌ Don't
+
+- Mix production and development instructions
+- Ignore polling errors or connection issues
+- Use overly aggressive polling in production
+- Deploy without testing instruction changes
+- Forget to stop polling when shutting down
+- Hardcode sensitive information in instructions
+
+</div>
+
+## API Reference
+
+### Agent Configuration
+
+```typescript
+interface AgentConfig {
+  name: string;
+  instructions: (context: RuntimeContext) => Promise<string>;
+  model: LanguageModel;
+  memory: Memory;
+}
+```
+
+**Parameters:**
+
+- `name` (string): Name of the agent
+- `instructions` (function): Async function returning agent instructions
+- `model` (LanguageModel): Language model instance from Promptrun SDK
+- `memory` (Memory): Memory storage for conversation history
+
+### Dynamic Instructions Pattern
+
+```typescript
+const agent = new Agent({
+  name: "PromptRun Agent",
+  instructions: async ({ runtimeContext }) => {
+    const instructions = await promptrunSDK.prompt({
+      projectId: "YOUR_PROJECT_ID",
+      poll: 30000,
+      onChange: (changeEvent) => {
+        console.log(
+          `Instructions updated to version ${changeEvent.prompt.version}`
+        );
+      },
+    });
+    return instructions.prompt;
+  },
+  model: promptrunSDK.model("openai/gpt-4o"),
+  memory: new Memory({
+    storage: new LibSQLStore({ url: ":memory:" }),
+  }),
+});
+```
+
+### Environment Configuration
+
+```typescript
+interface EnvironmentConfig {
+  tag: string;
+  pollInterval: number;
+  model: string;
+  databaseUrl: string;
+}
+```
+
+**Environment Mappings:**
+
+- **Production**: `{ tag: "production", pollInterval: 300000, model: "openai/gpt-4o" }`
+- **Staging**: `{ tag: "staging", pollInterval: 60000, model: "openai/gpt-4o" }`
+- **Development**: `{ tag: "development", pollInterval: 10000, model: "openai/gpt-4o-mini" }`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Error Handling"
+    icon="shield-exclamation"
+    href="/apis/sdk/error-handling"
+  >
+    Implement robust error handling for production agents
+  </Card>
+  <Card
+    title="Real-time Updates"
+    icon="broadcast-tower"
+    href="/apis/sdk/realtime-updates"
+  >
+    Learn more about polling and Server-Sent Events
+  </Card>
+  <Card
+    title="Dynamic Prompts"
+    icon="arrows-rotate"
+    href="/apis/sdk/dynamic-prompts"
+  >
+    Master prompt management from your dashboard
+  </Card>
+  <Card
+    title="Vercel AI Integration"
+    icon="bolt"
+    href="/apis/sdk/vercel-integration"
+  >
+    Use dynamic prompts with generateText and streamText
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Mastra Documentation**: Visit [mastra.ai](https://mastra.ai) for
+  comprehensive documentation on building AI agents with the Mastra framework.
+</Tip>
+
+<Warning>
+  **Agent Testing**: Always test agent behavior with new instructions in a
+  staging environment before promoting to production.
+</Warning>{" "}

@@ -1,0 +1,486 @@
+---
+title: "Vercel AI Integration"
+description: "Seamlessly integrate with Vercel AI SDK for powerful text generation and streaming capabilities."
+icon: "bolt"
+---
+
+## Overview
+
+The Promptrun SDK is designed as a drop-in replacement for other AI providers in the Vercel AI SDK ecosystem. It provides seamless integration with `generateText`, `streamText`, `generateObject`, and all other Vercel AI SDK helpers, enabling you to leverage dynamic prompt management while maintaining full compatibility with the Vercel AI SDK API.
+
+## Basic Text Generation
+
+Use `generateText` for complete text responses:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrun.model("openai/gpt-4o");
+
+const { text } = await generateText({
+  model,
+  prompt: "Write a haiku about coding.",
+});
+
+console.log(text);
+```
+
+## Messages Array Format
+
+For chat applications, use the messages array format:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrun.model("openai/gpt-4o");
+
+const { text } = await generateText({
+  model,
+  messages: [
+    {
+      role: "system",
+      content:
+        "You are a helpful AI assistant that specializes in creative writing.",
+    },
+    {
+      role: "user",
+      content: "Tell me a short story about a robot who learns to paint.",
+    },
+  ],
+});
+
+console.log(text);
+```
+
+**Message Interface:**
+
+```typescript
+interface Message {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+```
+
+## Streaming Responses
+
+For interactive applications, use `streamText` to get real-time responses:
+
+```typescript
+import { streamText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrun.model("openai/gpt-4o");
+
+const { textStream } = await streamText({
+  model,
+  prompt: "Write a story about space exploration.",
+});
+
+for await (const delta of textStream) {
+  process.stdout.write(delta);
+}
+```
+
+**Response Interface:**
+
+```typescript
+interface StreamTextResult {
+  textStream: AsyncIterable<string>;
+  text: Promise<string>;
+  finishReason: Promise<string>;
+  usage: Promise<CompletionTokenUsage>;
+}
+```
+
+## Streaming with Messages Format
+
+Combine streaming with messages for chat applications:
+
+```typescript
+import { streamText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrun.model("openai/gpt-4o");
+
+const { textStream } = await streamText({
+  model,
+  messages: [
+    { role: "system", content: "You are a helpful assistant." },
+    { role: "user", content: "Explain quantum computing in simple terms." },
+  ],
+});
+
+console.log("AI Response (streaming):");
+for await (const delta of textStream) {
+  process.stdout.write(delta);
+}
+console.log("\n");
+```
+
+## Advanced Configuration
+
+### Temperature and Model Parameters
+
+Control the model's behavior with standard parameters:
+
+```typescript
+const { text } = await generateText({
+  model,
+  messages: [{ role: "user", content: "Be creative and write a poem." }],
+  temperature: 0.8,
+  maxTokens: 200,
+  topP: 0.9,
+});
+```
+
+**Parameters:**
+
+- `temperature` (number): Controls randomness (0.0 - 2.0, higher = more creative)
+- `maxTokens` (number): Maximum response length
+- `topP` (number): Nucleus sampling parameter (0.0 - 1.0)
+
+### Model Selection
+
+Choose different models based on your needs:
+
+```typescript
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const fastModel = promptrun.model("openai/gpt-4o-mini");
+const powerfulModel = promptrun.model("openai/gpt-4o");
+const claudeModel = promptrun.model("anthropic/claude-3.5-haiku");
+
+const { text: summary } = await generateText({
+  model: fastModel,
+  prompt: "Summarize this in one sentence: " + longText,
+});
+
+const { text: analysis } = await generateText({
+  model: powerfulModel,
+  prompt: "Provide a detailed analysis of: " + complexTopic,
+});
+```
+
+**Supported Models:**
+
+- OpenAI: `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/gpt-3.5-turbo`
+- Anthropic: `anthropic/claude-3.5-haiku`, `anthropic/claude-3.5-sonnet`
+- Google: `google/gemini-1.5-pro`, `google/gemini-1.5-flash`
+
+## Multi-turn Conversations
+
+Build chatbots with conversation history:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class ChatBot {
+  private model: any;
+  private messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [];
+
+  constructor() {
+    const promptrun = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    this.model = promptrun.model("openai/gpt-4o");
+
+    this.messages = [
+      {
+        role: "system",
+        content: "You are a helpful assistant that remembers our conversation.",
+      },
+    ];
+  }
+
+  async sendMessage(userMessage: string): Promise<string> {
+    this.messages.push({ role: "user", content: userMessage });
+
+    const { text } = await generateText({
+      model: this.model,
+      messages: this.messages,
+    });
+
+    this.messages.push({ role: "assistant", content: text });
+
+    return text;
+  }
+
+  getConversationHistory() {
+    return [...this.messages];
+  }
+
+  clearHistory() {
+    this.messages = this.messages.filter((msg) => msg.role === "system");
+  }
+}
+
+const bot = new ChatBot();
+
+const response1 = await bot.sendMessage("Hello! My name is Alice.");
+console.log("Bot:", response1);
+
+const response2 = await bot.sendMessage("What's my name?");
+console.log("Bot:", response2);
+```
+
+## Streaming Chat Implementation
+
+Create a real-time chat experience:
+
+```typescript
+import { streamText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class StreamingChatBot {
+  private model: any;
+  private messages: Array<{ role: string; content: string }> = [];
+
+  constructor() {
+    const promptrun = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    this.model = promptrun.model("openai/gpt-4o");
+    this.messages = [
+      {
+        role: "system",
+        content:
+          "You are a helpful assistant. Respond naturally and conversationally.",
+      },
+    ];
+  }
+
+  async streamMessage(userMessage: string) {
+    this.messages.push({ role: "user", content: userMessage });
+
+    const { textStream } = await streamText({
+      model: this.model,
+      messages: this.messages,
+    });
+
+    let assistantResponse = "";
+
+    for await (const delta of textStream) {
+      process.stdout.write(delta);
+      assistantResponse += delta;
+    }
+
+    this.messages.push({ role: "assistant", content: assistantResponse });
+
+    console.log("\n");
+    return assistantResponse;
+  }
+}
+
+const streamingBot = new StreamingChatBot();
+await streamingBot.streamMessage("Tell me a joke!");
+await streamingBot.streamMessage("Tell me another one!");
+```
+
+## Error Handling with Vercel AI
+
+Handle errors gracefully in your Vercel AI integration:
+
+```typescript
+import { generateText } from "ai";
+import {
+  PromptrunSDK,
+  PromptrunAuthenticationError,
+  PromptrunAPIError,
+} from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrun.model("openai/gpt-4o");
+
+async function safeGenerate(prompt: string) {
+  try {
+    const { text } = await generateText({
+      model,
+      prompt,
+    });
+    return text;
+  } catch (error) {
+    if (error instanceof PromptrunAuthenticationError) {
+      console.error("Authentication failed. Check your API key.");
+      return "Sorry, I'm having authentication issues.";
+    } else if (error instanceof PromptrunAPIError) {
+      console.error("API error:", error.message);
+      return "Sorry, I'm experiencing technical difficulties.";
+    } else {
+      console.error("Unexpected error:", error);
+      return "Sorry, something went wrong.";
+    }
+  }
+}
+
+const response = await safeGenerate("Hello, how are you?");
+console.log(response);
+```
+
+## Caching for Performance
+
+Use the built-in caching feature to improve performance and reduce costs:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const modelWithCache = promptrun.model("openai/gpt-4o", {
+  cache: { id: "user-123-summary" },
+});
+
+const { text: firstResponse } = await generateText({
+  model: modelWithCache,
+  prompt: "Summarize this document: " + document,
+});
+
+const { text: cachedResponse } = await generateText({
+  model: modelWithCache,
+  prompt: "This prompt will be ignored - cache will be used",
+  headers: {
+    "x-promptrun-use-cache": "true",
+  },
+});
+
+console.log("Cached response:", cachedResponse);
+```
+
+**Cache Configuration:**
+
+```typescript
+interface CacheOptions {
+  id: string;
+}
+```
+
+## API Reference
+
+### generateText Options
+
+```typescript
+interface GenerateTextOptions {
+  model: LanguageModel;
+  prompt?: string;
+  messages?: Message[];
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  headers?: Record<string, string>;
+}
+```
+
+### streamText Options
+
+```typescript
+interface StreamTextOptions {
+  model: LanguageModel;
+  prompt?: string;
+  messages?: Message[];
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+}
+```
+
+### Response Types
+
+```typescript
+interface GenerateTextResult {
+  text: string;
+  finishReason: string;
+  usage: CompletionTokenUsage;
+}
+
+interface CompletionTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Dynamic Prompts"
+    icon="arrows-rotate"
+    href="/apis/sdk/dynamic-prompts"
+  >
+    Learn how to fetch and manage prompts from your dashboard
+  </Card>
+  <Card
+    title="Real-time Updates"
+    icon="broadcast-tower"
+    href="/apis/sdk/realtime-updates"
+  >
+    Set up polling and Server-Sent Events for live prompt updates
+  </Card>
+  <Card
+    title="Mastra Integration"
+    icon="robot"
+    href="/apis/sdk/mastra-integration"
+  >
+    Build AI agents with auto-updating instructions
+  </Card>
+  <Card
+    title="Error Handling"
+    icon="shield-exclamation"
+    href="/apis/sdk/error-handling"
+  >
+    Implement robust error handling for production applications
+  </Card>
+</CardGroup>
+
+## Tips for Production
+
+<Tip>
+  **Performance**: Use caching for frequently repeated requests to reduce
+  latency and costs.
+</Tip>
+
+<Tip>
+  **Conversation Memory**: For long conversations, consider implementing
+  conversation summarization to stay within token limits.
+</Tip>
+
+<Tip>
+  **Model Selection**: Use faster, cheaper models (like `gpt-4o-mini`) for
+  simple tasks and reserve powerful models for complex operations.
+</Tip>
+
+<Warning>
+  **Rate Limits**: Be mindful of rate limits when making many concurrent
+  requests. Implement proper backoff strategies.
+</Warning>{" "}

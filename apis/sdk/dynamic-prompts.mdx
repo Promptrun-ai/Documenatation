@@ -1,0 +1,563 @@
+---
+title: "Dynamic Prompt Management"
+description: "Fetch and manage prompts from your Promptrun dashboard with version control and real-time updates."
+icon: "arrows-rotate"
+---
+
+## Overview
+
+Dynamic prompt management is one of the most powerful features of the Promptrun SDK. Instead of hardcoding prompts in your application, you can manage them through your Promptrun dashboard and fetch them dynamically, allowing you to update prompts without code changes or redeployments.
+
+## Basic Prompt Fetching
+
+Fetch a prompt from your project with a simple API call:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function fetchBasicPrompt() {
+  const promptData = await promptrun.prompt({
+    projectId: "YOUR_PROMPTRUN_PROJECT_ID",
+    poll: 0,
+  });
+
+  console.log(`Prompt version: ${promptData.version}`);
+  console.log(`Prompt content: ${promptData.prompt}`);
+  console.log(`Model: ${promptData.model.model}`);
+
+  return promptData;
+}
+
+fetchBasicPrompt();
+```
+
+**Parameters:**
+
+- `projectId` (string, required): Your Promptrun project ID
+- `poll` (number, optional): Set to 0 for one-time fetch
+
+## Using Dynamic Prompts with Vercel AI
+
+Combine dynamic prompts with the Vercel AI SDK:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function generateWithDynamicPrompt() {
+  const promptData = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: 0,
+  });
+
+  const model = promptrun.model(promptData.model.model);
+
+  const { text } = await generateText({
+    model,
+    prompt: promptData.prompt,
+  });
+
+  console.log("Generated text:", text);
+  return text;
+}
+
+generateWithDynamicPrompt();
+```
+
+## System Message Pattern
+
+A common pattern is using the fetched prompt as a system message:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function chatWithDynamicSystem(userMessage: string) {
+  const promptData = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: 0,
+  });
+
+  const model = promptrun.model(promptData.model.model);
+
+  const { text } = await generateText({
+    model,
+    messages: [
+      { role: "system", content: promptData.prompt },
+      { role: "user", content: userMessage },
+    ],
+  });
+
+  return text;
+}
+
+const response = await chatWithDynamicSystem("Who are you?");
+console.log("AI:", response);
+```
+
+## Version Management
+
+### Fetching Specific Versions
+
+You can fetch specific versions of your prompts:
+
+```typescript
+const v2Prompt = await promptrun.prompt({
+  projectId: "YOUR_PROJECT_ID",
+  version: "v2",
+  poll: 0,
+});
+
+console.log(`Using version: ${v2Prompt.version}`);
+console.log(`Content: ${v2Prompt.prompt}`);
+```
+
+### Tagged Versions
+
+Use tags like "production", "staging", or "development":
+
+```typescript
+const productionPrompt = await promptrun.prompt({
+  projectId: "YOUR_PROJECT_ID",
+  tag: "production",
+  poll: 0,
+});
+
+const stagingPrompt = await promptrun.prompt({
+  projectId: "YOUR_PROJECT_ID",
+  tag: "staging",
+  poll: 0,
+});
+
+console.log(`Production prompt: ${productionPrompt.prompt}`);
+console.log(`Staging prompt: ${stagingPrompt.prompt}`);
+```
+
+**Version and Tag Parameters:**
+
+- `version` (string, optional): Specific version to fetch (e.g., "v1", "v2")
+- `tag` (string, optional): Specific tag to fetch (e.g., "production", "staging")
+
+## Environment-based Prompt Management
+
+Organize prompts by environment:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+class EnvironmentPrompts {
+  private projectId: string;
+
+  constructor(projectId: string) {
+    this.projectId = projectId;
+  }
+
+  async getPromptForEnvironment() {
+    const environment = process.env.NODE_ENV || "development";
+
+    const tagMap = {
+      production: "production",
+      staging: "staging",
+      development: "dev",
+      test: "test",
+    };
+
+    const tag = tagMap[environment] || "dev";
+
+    try {
+      const promptData = await promptrun.prompt({
+        projectId: this.projectId,
+        tag,
+        poll: 0,
+      });
+
+      console.log(`Using ${environment} prompt (tag: ${tag})`);
+      return promptData;
+    } catch (error) {
+      console.warn(`Failed to fetch ${tag} prompt, falling back to latest`);
+
+      return await promptrun.prompt({
+        projectId: this.projectId,
+        poll: 0,
+      });
+    }
+  }
+}
+
+const envPrompts = new EnvironmentPrompts("YOUR_PROJECT_ID");
+const promptData = await envPrompts.getPromptForEnvironment();
+```
+
+## Multi-Project Management
+
+Manage prompts from multiple projects:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+class MultiProjectChat {
+  private prompts: { [key: string]: any } = {};
+
+  async initialize() {
+    const [customerSupport, salesAgent, techSupport] = await Promise.all([
+      promptrun.prompt({
+        projectId: "customer-support-project-id",
+        tag: "production",
+        poll: 0,
+      }),
+      promptrun.prompt({
+        projectId: "sales-agent-project-id",
+        tag: "production",
+        poll: 0,
+      }),
+      promptrun.prompt({
+        projectId: "tech-support-project-id",
+        tag: "production",
+        poll: 0,
+      }),
+    ]);
+
+    this.prompts = {
+      customerSupport,
+      salesAgent,
+      techSupport,
+    };
+
+    console.log("All prompts loaded successfully");
+  }
+
+  async chatWithAgent(agentType: string, userMessage: string) {
+    const promptData = this.prompts[agentType];
+    if (!promptData) {
+      throw new Error(`Agent type '${agentType}' not found`);
+    }
+
+    const model = promptrun.model(promptData.model.model);
+
+    const { text } = await generateText({
+      model,
+      messages: [
+        { role: "system", content: promptData.prompt },
+        { role: "user", content: userMessage },
+      ],
+    });
+
+    return text;
+  }
+}
+
+const multiChat = new MultiProjectChat();
+await multiChat.initialize();
+
+const customerResponse = await multiChat.chatWithAgent(
+  "customerSupport",
+  "I need help with my order"
+);
+
+const salesResponse = await multiChat.chatWithAgent(
+  "salesAgent",
+  "Tell me about your pricing"
+);
+
+console.log("Customer Support:", customerResponse);
+console.log("Sales Agent:", salesResponse);
+```
+
+## Prompt Data Structure
+
+Understanding the prompt data structure returned by the API:
+
+```typescript
+interface PromptrunPrompt {
+  id: string;
+  projectId: string;
+  version: number;
+  prompt: string;
+  temperature: number;
+  tag: string | null;
+  model: {
+    model: string;
+    provider: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+**Properties:**
+
+- `id` (string): Unique prompt ID
+- `projectId` (string): Project this prompt belongs to
+- `version` (number): Version number
+- `prompt` (string): The actual prompt content
+- `temperature` (number): Model temperature setting
+- `tag` (string | null): Tag if assigned (e.g., "production")
+- `model.model` (string): Model identifier (e.g., "openai/gpt-4o")
+- `model.provider` (string): Provider name
+- `createdAt` (string): Creation timestamp
+- `updatedAt` (string): Last update timestamp
+
+Example usage:
+
+```typescript
+const promptData = await promptrun.prompt({
+  projectId: "YOUR_PROJECT_ID",
+  poll: 0,
+});
+
+console.log("Prompt Details:", {
+  id: promptData.id,
+  version: promptData.version,
+  temperature: promptData.temperature,
+  model: promptData.model.model,
+  provider: promptData.model.provider,
+  hasTag: !!promptData.tag,
+  contentLength: promptData.prompt.length,
+  lastUpdated: new Date(promptData.updatedAt).toLocaleString(),
+});
+```
+
+## Caching Fetched Prompts
+
+For production applications, consider caching prompts locally:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class PromptCache {
+  private cache: Map<string, { prompt: any; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 5 * 60 * 1000;
+
+  constructor(private promptrun: PromptrunSDK) {}
+
+  async getPrompt(projectId: string, options: any = {}) {
+    const cacheKey = `${projectId}-${options.version || "latest"}-${
+      options.tag || "none"
+    }`;
+    const cached = this.cache.get(cacheKey);
+
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      console.log(`Using cached prompt for ${cacheKey}`);
+      return cached.prompt;
+    }
+
+    console.log(`Fetching fresh prompt for ${cacheKey}`);
+    const prompt = await this.promptrun.prompt({
+      projectId,
+      poll: 0,
+      ...options,
+    });
+
+    this.cache.set(cacheKey, {
+      prompt,
+      timestamp: Date.now(),
+    });
+
+    return prompt;
+  }
+
+  clearCache() {
+    this.cache.clear();
+    console.log("Prompt cache cleared");
+  }
+
+  getCacheStats() {
+    return {
+      size: this.cache.size,
+      keys: Array.from(this.cache.keys()),
+    };
+  }
+}
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const cache = new PromptCache(promptrun);
+
+const prompt1 = await cache.getPrompt("YOUR_PROJECT_ID");
+const prompt2 = await cache.getPrompt("YOUR_PROJECT_ID");
+
+console.log("Cache stats:", cache.getCacheStats());
+```
+
+**Cache Configuration:**
+
+- `CACHE_TTL` (number): Time-to-live in milliseconds (5 minutes = 300,000ms)
+
+## Error Handling for Dynamic Prompts
+
+Handle errors gracefully when fetching prompts:
+
+```typescript
+import {
+  PromptrunSDK,
+  PromptrunAuthenticationError,
+  PromptrunAPIError,
+} from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function safePromptFetch(projectId: string, fallbackPrompt: string) {
+  try {
+    const promptData = await promptrun.prompt({
+      projectId,
+      poll: 0,
+    });
+
+    console.log(`Successfully loaded prompt version ${promptData.version}`);
+    return promptData.prompt;
+  } catch (error) {
+    if (error instanceof PromptrunAuthenticationError) {
+      console.error("Authentication failed - check your API key");
+    } else if (error instanceof PromptrunAPIError) {
+      console.error(`API error: ${error.message}`);
+    } else {
+      console.error("Unexpected error:", error);
+    }
+
+    console.log("Using fallback prompt");
+    return fallbackPrompt;
+  }
+}
+
+const prompt = await safePromptFetch(
+  "YOUR_PROJECT_ID",
+  "You are a helpful assistant."
+);
+
+console.log("Using prompt:", prompt);
+```
+
+## API Reference
+
+### prompt() Method Options
+
+```typescript
+interface PromptrunPromptOptions {
+  projectId: string;
+  poll?: number | "sse";
+  version?: string;
+  tag?: string;
+  onChange?: (event: PromptrunPromptChangeEvent) => void;
+  onPollingError?: (error: PromptrunPollingError) => void;
+  enforceMinimumInterval?: boolean;
+}
+```
+
+**Parameters:**
+
+- `projectId` (string, required): Your project ID
+- `poll` (number | "sse", optional): Polling interval in ms, "sse", or 0 to disable
+- `version` (string, optional): Specific version to fetch
+- `tag` (string, optional): Specific tag to fetch
+- `onChange` (function, optional): Change callback for polling
+- `onPollingError` (function, optional): Error callback for polling
+- `enforceMinimumInterval` (boolean, optional): Enforce 5-second minimum interval
+
+### Return Types
+
+```typescript
+interface PromptrunPrompt {
+  id: string;
+  projectId: string;
+  version: number;
+  prompt: string;
+  temperature: number;
+  tag: string | null;
+  model: {
+    model: string;
+    provider: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+## Best Practices
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div>
+    <h3 className="text-lg font-semibold mb-2">✅ Do</h3>
+    <ul className="space-y-1 text-sm">
+      <li>• Use environment-based tagging</li>
+      <li>• Implement fallback prompts</li>
+      <li>• Cache prompts for performance</li>
+      <li>• Version your prompts systematically</li>
+      <li>• Test prompts in staging first</li>
+    </ul>
+  </div>
+  <div>
+    <h3 className="text-lg font-semibold mb-2">❌ Don't</h3>
+    <ul className="space-y-1 text-sm">
+      <li>• Hardcode sensitive information in prompts</li>
+      <li>• Deploy without testing prompt changes</li>
+      <li>• Ignore error handling</li>
+      <li>• Use overly long cache TTLs</li>
+      <li>• Mix production and test prompts</li>
+    </ul>
+  </div>
+</div>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Real-time Updates"
+    icon="broadcast-tower"
+    href="/apis/sdk/realtime-updates"
+  >
+    Set up polling and Server-Sent Events for automatic prompt updates
+  </Card>
+  <Card
+    title="Vercel AI Integration"
+    icon="bolt"
+    href="/apis/sdk/vercel-integration"
+  >
+    Learn how to use dynamic prompts with generateText and streamText
+  </Card>
+  <Card title="Mastra Integration" icon="robot" href="/apis/sdk/mastra-integration">
+    Build AI agents with auto-updating instructions
+  </Card>
+  <Card
+    title="Error Handling"
+    icon="shield-exclamation"
+    href="/apis/sdk/error-handling"
+  >
+    Implement robust error handling for production applications
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Dashboard Management**: Remember that you can create, edit, and manage all
+  your prompts through the [Promptrun dashboard](https://app.promptrun.ai)
+  without touching your code.
+</Tip>
+
+<Warning>
+  **Version Control**: Always test prompt changes in a staging environment
+  before promoting to production tags.
+</Warning>{" "}

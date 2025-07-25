@@ -1,0 +1,843 @@
+---
+title: "Error Handling"
+description: "Implement robust error handling and troubleshooting for production applications using the Promptrun SDK."
+icon: "shield-exclamation"
+---
+
+## Overview
+
+The Promptrun SDK provides comprehensive error handling through custom error classes, enabling you to build resilient applications that gracefully handle API issues, network problems, authentication failures, and other edge cases.
+
+## Error Class Hierarchy
+
+The SDK includes several specialized error classes:
+
+```typescript
+import {
+  PromptrunError,
+  PromptrunAuthenticationError,
+  PromptrunAPIError,
+  PromptrunConnectionError,
+  PromptrunConfigurationError,
+  PromptrunPollingError,
+} from "@promptrun-ai/sdk";
+```
+
+## Basic Error Handling
+
+### Simple Try-Catch Pattern
+
+```typescript
+import { generateText } from "ai";
+import {
+  PromptrunSDK,
+  PromptrunAuthenticationError,
+  PromptrunAPIError,
+  PromptrunConnectionError,
+  PromptrunError,
+} from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrun.model("openai/gpt-4o");
+
+async function safeGenerate(prompt: string) {
+  try {
+    const { text } = await generateText({
+      model,
+      prompt,
+    });
+    return { success: true, text };
+  } catch (error) {
+    if (error instanceof PromptrunAuthenticationError) {
+      console.error("Authentication failed:", error.message);
+      return {
+        success: false,
+        error: "Please check your API key and try again.",
+      };
+    } else if (error instanceof PromptrunAPIError) {
+      console.error("API error:", error.message, "Status:", error.statusCode);
+      return {
+        success: false,
+        error: "Service temporarily unavailable. Please try again later.",
+      };
+    } else if (error instanceof PromptrunConnectionError) {
+      console.error("Connection error:", error.message);
+      return {
+        success: false,
+        error:
+          "Network connection failed. Please check your internet connection.",
+      };
+    } else if (error instanceof PromptrunError) {
+      console.error("Promptrun SDK error:", error.message);
+      return {
+        success: false,
+        error: "An unexpected error occurred.",
+      };
+    } else {
+      console.error("Unknown error:", error);
+      return {
+        success: false,
+        error: "An unknown error occurred.",
+      };
+    }
+  }
+}
+
+const result = await safeGenerate("Tell me a joke");
+if (result.success) {
+  console.log(result.text);
+} else {
+  console.log("Error:", result.error);
+}
+```
+
+### Error-Safe Prompt Fetching
+
+```typescript
+import {
+  PromptrunSDK,
+  PromptrunAuthenticationError,
+  PromptrunAPIError,
+} from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function safePromptFetch(
+  projectId: string,
+  fallbackPrompt: string,
+  options: any = {}
+) {
+  try {
+    const promptData = await promptrun.prompt({
+      projectId,
+      poll: 0,
+      ...options,
+    });
+
+    console.log(`Successfully loaded prompt version ${promptData.version}`);
+    return {
+      success: true,
+      prompt: promptData.prompt,
+      model: promptData.model.model,
+      version: promptData.version,
+    };
+  } catch (error) {
+    console.error("Failed to fetch prompt:", error.message);
+
+    if (error instanceof PromptrunAuthenticationError) {
+      console.error("Authentication failed - check your API key");
+    } else if (error instanceof PromptrunAPIError) {
+      if (error.statusCode === 404) {
+        console.error("Project or prompt not found");
+      } else {
+        console.error(
+          `API error: ${error.message} (Status: ${error.statusCode})`
+        );
+      }
+    }
+
+    console.log("Using fallback prompt");
+    return {
+      success: false,
+      prompt: fallbackPrompt,
+      model: "openai/gpt-4o",
+      version: "fallback",
+      error: error.message,
+    };
+  }
+}
+
+const promptResult = await safePromptFetch(
+  "YOUR_PROJECT_ID",
+  "You are a helpful assistant.",
+  { tag: "production" }
+);
+
+console.log("Using prompt:", promptResult.prompt);
+if (!promptResult.success) {
+  console.log("Fell back due to:", promptResult.error);
+}
+```
+
+## Polling Error Handling
+
+### Advanced Polling Error Management
+
+Polling operations have specialized error handling with automatic retry and backoff:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function robustPolling(projectId: string) {
+  const pollingPrompt = await promptrun.prompt({
+    projectId,
+    poll: 30000,
+    onChange: (changeEvent) => {
+      console.log("Prompt updated successfully:", changeEvent.prompt.version);
+    },
+    onPollingError: (pollingError) => {
+      console.error("=== Polling Error ===");
+      console.error("Type:", pollingError.type);
+      console.error("Message:", pollingError.message);
+      console.error("Consecutive errors:", pollingError.consecutiveErrors);
+      console.error("Backoff multiplier:", pollingError.backoffMultiplier);
+      console.error("Status code:", pollingError.statusCode);
+      console.error("Project ID:", pollingError.projectId);
+
+      switch (pollingError.type) {
+        case "rate_limit":
+          console.log("⏳ Rate limited - automatic backoff applied");
+          console.log(
+            `Next attempt in ${pollingError.backoffMultiplier * 30000}ms`
+          );
+          break;
+
+        case "authentication":
+          console.log("🔑 Authentication failed - check API key");
+          if (pollingError.consecutiveErrors >= 3) {
+            console.log("Multiple auth failures - consider stopping polling");
+          }
+          break;
+
+        case "network":
+          console.log("🌐 Network error - will retry with backoff");
+          break;
+
+        case "api":
+          console.log("🔧 API error - server might be temporarily unavailable");
+          if (pollingError.statusCode >= 500) {
+            console.log("Server error - will retry");
+          } else if (pollingError.statusCode === 404) {
+            console.log("Project not found - stopping polling");
+          }
+          break;
+
+        default:
+          console.log("❓ Unknown error - monitoring will continue");
+      }
+
+      if (pollingError.consecutiveErrors >= 5) {
+        console.error("🚨 ALERT: Multiple consecutive polling errors detected");
+        console.error(
+          "Consider investigating the issue or adjusting polling settings"
+        );
+      }
+
+      console.error("===================");
+    },
+  });
+
+  setInterval(() => {
+    const status = pollingPrompt.getStatus();
+    if (status.consecutiveErrors > 0) {
+      console.warn(
+        `Polling health check: ${status.consecutiveErrors} consecutive errors`
+      );
+    }
+  }, 300000);
+
+  return pollingPrompt;
+}
+
+const pollingPrompt = await robustPolling("YOUR_PROJECT_ID");
+```
+
+### Error Recovery Strategies
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class ResilientPromptService {
+  private pollingPrompt: any;
+  private fallbackPrompt: string;
+  private errorCount = 0;
+  private lastSuccessfulPrompt: string;
+
+  constructor(private projectId: string, fallbackPrompt: string) {
+    this.fallbackPrompt = fallbackPrompt;
+    this.lastSuccessfulPrompt = fallbackPrompt;
+  }
+
+  async initialize() {
+    const promptrun = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    try {
+      this.pollingPrompt = await promptrun.prompt({
+        projectId: this.projectId,
+        poll: 30000,
+        onChange: (changeEvent) => {
+          this.errorCount = 0;
+          this.lastSuccessfulPrompt = changeEvent.prompt.prompt;
+          console.log(
+            "✅ Prompt updated successfully:",
+            changeEvent.prompt.version
+          );
+        },
+        onPollingError: (error) => {
+          this.errorCount++;
+          console.error(`❌ Polling error #${this.errorCount}:`, error.message);
+
+          if (this.errorCount >= 10) {
+            console.error("🔴 Circuit breaker activated - stopping polling");
+            this.pollingPrompt.stopPolling();
+            this.scheduleReconnection();
+          }
+
+          if (this.errorCount === 3) {
+            console.warn("⚠️ Warning: 3 consecutive polling errors");
+          } else if (this.errorCount === 5) {
+            console.error(
+              "🚨 Alert: 5 consecutive polling errors - investigation needed"
+            );
+          }
+        },
+      });
+
+      this.lastSuccessfulPrompt = this.pollingPrompt.prompt;
+      console.log("✅ Resilient prompt service initialized");
+    } catch (error) {
+      console.error("❌ Failed to initialize prompt service:", error.message);
+      console.log("🔄 Using fallback prompt");
+    }
+  }
+
+  getCurrentPrompt(): string {
+    return (
+      this.pollingPrompt?.prompt ||
+      this.lastSuccessfulPrompt ||
+      this.fallbackPrompt
+    );
+  }
+
+  getHealthStatus() {
+    return {
+      isPolling: this.pollingPrompt?.isPolling || false,
+      errorCount: this.errorCount,
+      usingFallback: !this.pollingPrompt,
+      lastSuccessfulPrompt:
+        this.lastSuccessfulPrompt === this.fallbackPrompt
+          ? "fallback"
+          : "from-server",
+      status: this.pollingPrompt?.getStatus() || null,
+    };
+  }
+
+  private scheduleReconnection() {
+    setTimeout(async () => {
+      console.log("🔄 Attempting to reconnect...");
+      try {
+        await this.initialize();
+        this.errorCount = 0;
+      } catch (error) {
+        console.error("❌ Reconnection failed:", error.message);
+        this.scheduleReconnection();
+      }
+    }, 5 * 60 * 1000);
+  }
+
+  shutdown() {
+    if (this.pollingPrompt) {
+      this.pollingPrompt.stopPolling();
+    }
+  }
+}
+
+const promptService = new ResilientPromptService(
+  "YOUR_PROJECT_ID",
+  "You are a helpful assistant."
+);
+
+await promptService.initialize();
+
+const currentPrompt = promptService.getCurrentPrompt();
+console.log("Current prompt:", currentPrompt);
+
+setInterval(() => {
+  const health = promptService.getHealthStatus();
+  console.log("Service health:", health);
+}, 60000);
+```
+
+## Production Error Handling
+
+### Comprehensive Error Handling Class
+
+```typescript
+import { generateText } from "ai";
+import {
+  PromptrunSDK,
+  PromptrunAuthenticationError,
+  PromptrunAPIError,
+  PromptrunConnectionError,
+  PromptrunConfigurationError,
+  PromptrunError,
+} from "@promptrun-ai/sdk";
+
+class ProductionChatService {
+  private promptrun: PromptrunSDK;
+  private pollingPrompt: any;
+  private model: any;
+  private errorStats = {
+    total: 0,
+    authentication: 0,
+    api: 0,
+    connection: 0,
+    configuration: 0,
+    unknown: 0,
+  };
+
+  constructor(private projectId: string) {
+    this.promptrun = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+  }
+
+  async initialize() {
+    try {
+      this.pollingPrompt = await this.promptrun.prompt({
+        projectId: this.projectId,
+        poll: process.env.NODE_ENV === "production" ? 60000 : 30000,
+        tag: process.env.NODE_ENV === "production" ? "production" : "staging",
+        onChange: (changeEvent) => {
+          console.log(`[${new Date().toISOString()}] Prompt updated:`, {
+            version: changeEvent.prompt.version,
+            changes: Object.keys(changeEvent.changes),
+          });
+
+          if (changeEvent.prompt.model.model !== this.model?.modelId) {
+            this.model = this.promptrun.model(changeEvent.prompt.model.model);
+          }
+        },
+        onPollingError: (error) => {
+          this.handlePollingError(error);
+        },
+      });
+
+      this.model = this.promptrun.model(this.pollingPrompt.model.model);
+      console.log("✅ Production chat service initialized successfully");
+    } catch (error) {
+      this.handleInitializationError(error);
+      throw error;
+    }
+  }
+
+  async chat(userMessage: string, conversationHistory: any[] = []) {
+    try {
+      const messages = [
+        { role: "system", content: this.pollingPrompt.prompt },
+        ...conversationHistory,
+        { role: "user", content: userMessage },
+      ];
+
+      const { text } = await generateText({
+        model: this.model,
+        messages,
+      });
+
+      return {
+        success: true,
+        response: text,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return this.handleChatError(error, userMessage);
+    }
+  }
+
+  private handleInitializationError(error: any) {
+    this.errorStats.total++;
+
+    if (error instanceof PromptrunAuthenticationError) {
+      this.errorStats.authentication++;
+      console.error(
+        "🔑 Authentication Error during initialization:",
+        error.message
+      );
+    } else if (error instanceof PromptrunAPIError) {
+      this.errorStats.api++;
+      console.error("🔧 API Error during initialization:", {
+        message: error.message,
+        statusCode: error.statusCode,
+        projectId: this.projectId,
+      });
+    } else if (error instanceof PromptrunConnectionError) {
+      this.errorStats.connection++;
+      console.error(
+        "🌐 Connection Error during initialization:",
+        error.message
+      );
+    } else if (error instanceof PromptrunConfigurationError) {
+      this.errorStats.configuration++;
+      console.error("⚙️ Configuration Error:", {
+        message: error.message,
+        parameter: error.parameter,
+        providedValue: error.providedValue,
+        expectedValue: error.expectedValue,
+      });
+    } else {
+      this.errorStats.unknown++;
+      console.error("❓ Unknown Error during initialization:", error);
+    }
+  }
+
+  private handlePollingError(pollingError: any) {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] Polling Error:`, {
+      type: pollingError.type,
+      message: pollingError.message,
+      consecutiveErrors: pollingError.consecutiveErrors,
+      backoffMultiplier: pollingError.backoffMultiplier,
+    });
+
+    if (pollingError.consecutiveErrors >= 5) {
+      this.sendAlert(
+        "Critical",
+        `Polling has failed ${pollingError.consecutiveErrors} times consecutively`
+      );
+    }
+
+    if (
+      pollingError.type === "authentication" &&
+      pollingError.consecutiveErrors >= 3
+    ) {
+      this.sendAlert(
+        "Critical",
+        "Multiple authentication failures - API key may be invalid"
+      );
+    }
+  }
+
+  private handleChatError(error: any, userMessage: string) {
+    this.errorStats.total++;
+    const timestamp = new Date().toISOString();
+
+    if (error instanceof PromptrunAuthenticationError) {
+      this.errorStats.authentication++;
+      console.error(`[${timestamp}] Chat Authentication Error:`, error.message);
+      return {
+        success: false,
+        error: "Authentication failed. Please try again later.",
+        errorType: "authentication",
+        timestamp,
+      };
+    } else if (error instanceof PromptrunAPIError) {
+      this.errorStats.api++;
+      console.error(`[${timestamp}] Chat API Error:`, {
+        message: error.message,
+        statusCode: error.statusCode,
+        userMessage: userMessage.substring(0, 100),
+      });
+
+      if (error.statusCode >= 500) {
+        return {
+          success: false,
+          error:
+            "Service temporarily unavailable. Please try again in a few moments.",
+          errorType: "server_error",
+          timestamp,
+        };
+      } else {
+        return {
+          success: false,
+          error:
+            "Unable to process your request. Please try rephrasing your message.",
+          errorType: "client_error",
+          timestamp,
+        };
+      }
+    } else if (error instanceof PromptrunConnectionError) {
+      this.errorStats.connection++;
+      console.error(`[${timestamp}] Chat Connection Error:`, error.message);
+      return {
+        success: false,
+        error:
+          "Network connection failed. Please check your internet connection and try again.",
+        errorType: "connection",
+        timestamp,
+      };
+    } else {
+      this.errorStats.unknown++;
+      console.error(`[${timestamp}] Unknown Chat Error:`, error);
+      return {
+        success: false,
+        error: "An unexpected error occurred. Please try again.",
+        errorType: "unknown",
+        timestamp,
+      };
+    }
+  }
+
+  private sendAlert(severity: string, message: string) {
+    console.error(`🚨 ${severity.toUpperCase()} ALERT: ${message}`);
+  }
+
+  getErrorStats() {
+    return {
+      ...this.errorStats,
+      errorRate:
+        this.errorStats.total > 0
+          ? (
+              (this.errorStats.total / (this.errorStats.total + 100)) *
+              100
+            ).toFixed(2) + "%"
+          : "0%",
+    };
+  }
+
+  getServiceHealth() {
+    const pollingStatus = this.pollingPrompt?.getStatus();
+    return {
+      initialized: !!this.pollingPrompt,
+      polling: pollingStatus?.isPolling || false,
+      consecutivePollingErrors: pollingStatus?.consecutiveErrors || 0,
+      errorStats: this.getErrorStats(),
+      lastSuccessfulFetch: pollingStatus?.lastSuccessfulFetch,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  shutdown() {
+    console.log("🔄 Shutting down production chat service...");
+    if (this.pollingPrompt) {
+      this.pollingPrompt.stopPolling();
+    }
+
+    console.log("📊 Final error statistics:", this.getErrorStats());
+    console.log("✅ Production chat service shutdown complete");
+  }
+}
+
+const chatService = new ProductionChatService("YOUR_PROJECT_ID");
+
+try {
+  await chatService.initialize();
+
+  const result = await chatService.chat("Hello! How can you help me?");
+
+  if (result.success) {
+    console.log("Response:", result.response);
+  } else {
+    console.log("Error:", result.error);
+  }
+
+  setInterval(() => {
+    const health = chatService.getServiceHealth();
+    console.log("Service health:", health);
+  }, 300000);
+} catch (error) {
+  console.error("Failed to initialize chat service:", error.message);
+  process.exit(1);
+}
+
+process.on("SIGINT", async () => {
+  console.log("Received SIGINT, shutting down gracefully...");
+  chatService.shutdown();
+  process.exit(0);
+});
+```
+
+## Error Types Reference
+
+| Error Class                    | When It Occurs                | HTTP Status    | Recommended Action                        |
+| ------------------------------ | ----------------------------- | -------------- | ----------------------------------------- |
+| `PromptrunAuthenticationError` | Invalid or missing API key    | 401            | Check API key, refresh credentials        |
+| `PromptrunAPIError`            | HTTP errors from API          | 400, 404, 500+ | Retry with backoff, check request         |
+| `PromptrunConnectionError`     | Network connectivity issues   | N/A            | Check network, retry with backoff         |
+| `PromptrunConfigurationError`  | Invalid SDK configuration     | N/A            | Fix configuration parameters              |
+| `PromptrunPollingError`        | Polling-specific failures     | Various        | Check polling settings, implement backoff |
+| `PromptrunError`               | Base class for all SDK errors | Various        | Catch-all handler                         |
+
+## Best Practices
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+### ✅ Do
+
+- Always implement error handling for production code
+- Use specific error classes for targeted handling
+- Implement fallback behavior for critical functionality
+- Log errors with appropriate detail levels
+- Monitor error rates and patterns
+- Use circuit breaker patterns for failing services
+- Provide user-friendly error messages
+- Set up alerting for critical errors
+
+### ❌ Don't
+
+- Ignore errors or fail silently
+- Expose internal error details to users
+- Retry indefinitely without backoff
+- Log sensitive information in error messages
+- Mix error handling with business logic
+- Use generic try-catch for all errors
+- Forget to handle polling errors
+- Skip graceful shutdown procedures
+
+</div>
+
+## Monitoring and Alerting
+
+### Key Metrics to Monitor
+
+```typescript
+// Example monitoring metrics
+const metricsToTrack = {
+  // Error rates
+  totalErrors: "Number of total errors",
+  errorsByType: "Breakdown of error types",
+  errorRate: "Percentage of failed requests",
+
+  // Polling health
+  consecutivePollingErrors: "Number of consecutive polling failures",
+  pollingUptime: "Percentage of time polling is active",
+  pollingLatency: "Time between polling attempts",
+
+  // Service health
+  serviceUptime: "Overall service availability",
+  responseTime: "Average response time",
+  promptFetchSuccess: "Success rate of prompt fetching",
+};
+```
+
+## API Reference
+
+### Error Classes
+
+```typescript
+class PromptrunError extends Error {
+  constructor(message: string, cause?: Error);
+}
+
+class PromptrunAuthenticationError extends PromptrunError {
+  constructor(message: string, statusCode: number);
+}
+
+class PromptrunAPIError extends PromptrunError {
+  constructor(message: string, statusCode: number, response?: any);
+  statusCode: number;
+}
+
+class PromptrunConnectionError extends PromptrunError {
+  constructor(message: string, cause?: Error);
+}
+
+class PromptrunConfigurationError extends PromptrunError {
+  constructor(
+    message: string,
+    parameter: string,
+    providedValue: any,
+    expectedValue?: any
+  );
+  parameter: string;
+  providedValue: any;
+  expectedValue?: any;
+}
+
+class PromptrunPollingError extends PromptrunError {
+  constructor(message: string, type: string, consecutiveErrors: number);
+  type: "rate_limit" | "authentication" | "network" | "api" | "unknown";
+  consecutiveErrors: number;
+  backoffMultiplier: number;
+  statusCode?: number;
+  projectId: string;
+}
+```
+
+### Error Handling Patterns
+
+```typescript
+try {
+  const result = await generateText({ model, prompt });
+  return { success: true, data: result };
+} catch (error) {
+  if (error instanceof PromptrunAuthenticationError) {
+    return {
+      success: false,
+      error: "Authentication failed",
+      code: "AUTH_ERROR",
+    };
+  } else if (error instanceof PromptrunAPIError) {
+    return {
+      success: false,
+      error: "API error",
+      code: "API_ERROR",
+      status: error.statusCode,
+    };
+  } else if (error instanceof PromptrunConnectionError) {
+    return {
+      success: false,
+      error: "Connection failed",
+      code: "NETWORK_ERROR",
+    };
+  }
+  return { success: false, error: "Unknown error", code: "UNKNOWN_ERROR" };
+}
+```
+
+### Error Response Format
+
+```typescript
+interface ErrorResponse {
+  success: false;
+  error: string;
+  errorType:
+    | "authentication"
+    | "api"
+    | "connection"
+    | "configuration"
+    | "polling"
+    | "unknown";
+  timestamp: string;
+  statusCode?: number;
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="SDK Overview" icon="code" href="/apis/sdk-overview">
+    Return to the main SDK documentation
+  </Card>
+  <Card
+    title="Real-time Updates"
+    icon="broadcast-tower"
+    href="/apis/sdk/realtime-updates"
+  >
+    Learn about robust polling implementations
+  </Card>
+  <Card
+    title="Dynamic Prompts"
+    icon="arrows-rotate"
+    href="/apis/sdk/dynamic-prompts"
+  >
+    Implement error-safe prompt fetching
+  </Card>
+  <Card
+    title="Vercel AI Integration"
+    icon="bolt"
+    href="/apis/sdk/vercel-integration"
+  >
+    Add error handling to your AI workflows
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Production Monitoring**: Consider integrating with monitoring services like
+  DataDog, New Relic, or Sentry for comprehensive error tracking and alerting.
+</Tip>
+
+<Warning>
+  **Error Recovery**: Always implement graceful degradation and fallback
+  mechanisms for critical application functionality.
+</Warning>{" "}
