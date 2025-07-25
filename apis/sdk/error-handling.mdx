@@ -6,7 +6,7 @@ icon: "shield-exclamation"
 
 ## Overview
 
-The Promptrun SDK provides comprehensive error handling through custom error classes, allowing you to build resilient applications that can gracefully handle API issues, network problems, authentication failures, and other edge cases.
+The Promptrun SDK provides comprehensive error handling through custom error classes, enabling you to build resilient applications that gracefully handle API issues, network problems, authentication failures, and other edge cases.
 
 ## Error Class Hierarchy
 
@@ -14,12 +14,12 @@ The SDK includes several specialized error classes:
 
 ```typescript
 import {
-  PromptrunError, // Base class for all SDK errors
-  PromptrunAuthenticationError, // Authentication failures (401)
-  PromptrunAPIError, // API errors (400, 404, 500, etc.)
-  PromptrunConnectionError, // Network connection issues
-  PromptrunConfigurationError, // Invalid SDK configuration
-  PromptrunPollingError, // Polling-specific errors
+  PromptrunError,
+  PromptrunAuthenticationError,
+  PromptrunAPIError,
+  PromptrunConnectionError,
+  PromptrunConfigurationError,
+  PromptrunPollingError,
 } from "@promptrun-ai/sdk";
 ```
 
@@ -86,7 +86,6 @@ async function safeGenerate(prompt: string) {
   }
 }
 
-// Usage
 const result = await safeGenerate("Tell me a joke");
 if (result.success) {
   console.log(result.text);
@@ -146,14 +145,13 @@ async function safePromptFetch(
     return {
       success: false,
       prompt: fallbackPrompt,
-      model: "openai/gpt-4o", // Default model
+      model: "openai/gpt-4o",
       version: "fallback",
       error: error.message,
     };
   }
 }
 
-// Usage with fallback
 const promptResult = await safePromptFetch(
   "YOUR_PROJECT_ID",
   "You are a helpful assistant.",
@@ -195,7 +193,6 @@ async function robustPolling(projectId: string) {
       console.error("Status code:", pollingError.statusCode);
       console.error("Project ID:", pollingError.projectId);
 
-      // Handle different error types
       switch (pollingError.type) {
         case "rate_limit":
           console.log("⏳ Rate limited - automatic backoff applied");
@@ -206,10 +203,8 @@ async function robustPolling(projectId: string) {
 
         case "authentication":
           console.log("🔑 Authentication failed - check API key");
-          // Consider stopping polling or refreshing credentials
           if (pollingError.consecutiveErrors >= 3) {
             console.log("Multiple auth failures - consider stopping polling");
-            // pollingPrompt.stopPolling(); // Uncomment to stop
           }
           break;
 
@@ -223,7 +218,6 @@ async function robustPolling(projectId: string) {
             console.log("Server error - will retry");
           } else if (pollingError.statusCode === 404) {
             console.log("Project not found - stopping polling");
-            // pollingPrompt.stopPolling();
           }
           break;
 
@@ -231,24 +225,17 @@ async function robustPolling(projectId: string) {
           console.log("❓ Unknown error - monitoring will continue");
       }
 
-      // Alert on persistent errors
       if (pollingError.consecutiveErrors >= 5) {
         console.error("🚨 ALERT: Multiple consecutive polling errors detected");
         console.error(
           "Consider investigating the issue or adjusting polling settings"
         );
-
-        // In production, you might want to:
-        // - Send alerts to your monitoring system
-        // - Temporarily stop polling
-        // - Switch to fallback behavior
       }
 
       console.error("===================");
     },
   });
 
-  // Monitor polling health
   setInterval(() => {
     const status = pollingPrompt.getStatus();
     if (status.consecutiveErrors > 0) {
@@ -256,12 +243,11 @@ async function robustPolling(projectId: string) {
         `Polling health check: ${status.consecutiveErrors} consecutive errors`
       );
     }
-  }, 300000); // Check every 5 minutes
+  }, 300000);
 
   return pollingPrompt;
 }
 
-// Usage
 const pollingPrompt = await robustPolling("YOUR_PROJECT_ID");
 ```
 
@@ -291,7 +277,6 @@ class ResilientPromptService {
         projectId: this.projectId,
         poll: 30000,
         onChange: (changeEvent) => {
-          // Reset error count on successful update
           this.errorCount = 0;
           this.lastSuccessfulPrompt = changeEvent.prompt.prompt;
           console.log(
@@ -303,14 +288,12 @@ class ResilientPromptService {
           this.errorCount++;
           console.error(`❌ Polling error #${this.errorCount}:`, error.message);
 
-          // Implement circuit breaker pattern
           if (this.errorCount >= 10) {
             console.error("🔴 Circuit breaker activated - stopping polling");
             this.pollingPrompt.stopPolling();
             this.scheduleReconnection();
           }
 
-          // Escalate alerts based on error count
           if (this.errorCount === 3) {
             console.warn("⚠️ Warning: 3 consecutive polling errors");
           } else if (this.errorCount === 5) {
@@ -330,7 +313,6 @@ class ResilientPromptService {
   }
 
   getCurrentPrompt(): string {
-    // Always return a working prompt, even if polling is broken
     return (
       this.pollingPrompt?.prompt ||
       this.lastSuccessfulPrompt ||
@@ -352,18 +334,16 @@ class ResilientPromptService {
   }
 
   private scheduleReconnection() {
-    // Attempt to reconnect after 5 minutes
     setTimeout(async () => {
       console.log("🔄 Attempting to reconnect...");
       try {
         await this.initialize();
-        this.errorCount = 0; // Reset error count on successful reconnection
+        this.errorCount = 0;
       } catch (error) {
         console.error("❌ Reconnection failed:", error.message);
-        // Schedule another reconnection attempt
         this.scheduleReconnection();
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000);
   }
 
   shutdown() {
@@ -373,7 +353,6 @@ class ResilientPromptService {
   }
 }
 
-// Usage
 const promptService = new ResilientPromptService(
   "YOUR_PROJECT_ID",
   "You are a helpful assistant."
@@ -381,15 +360,13 @@ const promptService = new ResilientPromptService(
 
 await promptService.initialize();
 
-// Always get a working prompt
 const currentPrompt = promptService.getCurrentPrompt();
 console.log("Current prompt:", currentPrompt);
 
-// Monitor health
 setInterval(() => {
   const health = promptService.getHealthStatus();
   console.log("Service health:", health);
-}, 60000); // Check every minute
+}, 60000);
 ```
 
 ## Production Error Handling
@@ -438,7 +415,6 @@ class ProductionChatService {
             changes: Object.keys(changeEvent.changes),
           });
 
-          // Update model if needed
           if (changeEvent.prompt.model.model !== this.model?.modelId) {
             this.model = this.promptrun.model(changeEvent.prompt.model.model);
           }
@@ -524,7 +500,6 @@ class ProductionChatService {
       backoffMultiplier: pollingError.backoffMultiplier,
     });
 
-    // Send alerts for critical errors
     if (pollingError.consecutiveErrors >= 5) {
       this.sendAlert(
         "Critical",
@@ -532,7 +507,6 @@ class ProductionChatService {
       );
     }
 
-    // Handle authentication errors specially
     if (
       pollingError.type === "authentication" &&
       pollingError.consecutiveErrors >= 3
@@ -606,21 +580,6 @@ class ProductionChatService {
 
   private sendAlert(severity: string, message: string) {
     console.error(`🚨 ${severity.toUpperCase()} ALERT: ${message}`);
-
-    // In production, integrate with your alerting system:
-    // - Send to Slack/Discord
-    // - Send email notifications
-    // - Push to monitoring dashboard
-    // - Create incident tickets
-
-    // Example placeholder for alerting integration:
-    // await this.alertingService.send({
-    //   severity,
-    //   message,
-    //   service: "promptrun-chat-service",
-    //   timestamp: new Date().toISOString(),
-    //   stats: this.errorStats,
-    // });
   }
 
   getErrorStats() {
@@ -654,19 +613,16 @@ class ProductionChatService {
       this.pollingPrompt.stopPolling();
     }
 
-    // Log final stats
     console.log("📊 Final error statistics:", this.getErrorStats());
     console.log("✅ Production chat service shutdown complete");
   }
 }
 
-// Usage
 const chatService = new ProductionChatService("YOUR_PROJECT_ID");
 
 try {
   await chatService.initialize();
 
-  // Use the service
   const result = await chatService.chat("Hello! How can you help me?");
 
   if (result.success) {
@@ -675,17 +631,15 @@ try {
     console.log("Error:", result.error);
   }
 
-  // Monitor service health
   setInterval(() => {
     const health = chatService.getServiceHealth();
     console.log("Service health:", health);
-  }, 300000); // Every 5 minutes
+  }, 300000);
 } catch (error) {
   console.error("Failed to initialize chat service:", error.message);
   process.exit(1);
 }
 
-// Graceful shutdown
 process.on("SIGINT", async () => {
   console.log("Received SIGINT, shutting down gracefully...");
   chatService.shutdown();

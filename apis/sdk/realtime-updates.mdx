@@ -6,7 +6,7 @@ icon: "broadcast-tower"
 
 ## Overview
 
-One of the most powerful features of the Promptrun SDK is its ability to automatically update prompts in real-time. This means you can change prompts in your dashboard and have them immediately take effect in your running applications without any code changes or redeployments.
+One of the most powerful features of the Promptrun SDK is its ability to automatically update prompts in real-time. This enables you to change prompts in your dashboard and have them immediately take effect in your running applications without any code changes or redeployments.
 
 ## Polling for Updates
 
@@ -22,10 +22,9 @@ const promptrun = new PromptrunSDK({
 });
 
 async function setupPolling() {
-  // Enable polling (checks for updates every 30 seconds)
   const pollingPrompt = await promptrun.prompt({
     projectId: "YOUR_PROJECT_ID",
-    poll: 30000, // Poll every 30 seconds
+    poll: 30000,
     onChange: (changeEvent) => {
       console.log("Prompt updated!", {
         newVersion: changeEvent.prompt.version,
@@ -33,7 +32,6 @@ async function setupPolling() {
         changes: changeEvent.changes,
       });
 
-      // Handle specific changes
       if (changeEvent.changes.content) {
         console.log(
           "Content changed from:",
@@ -71,16 +69,14 @@ class AutoUpdatingChatBot {
       apiKey: process.env.PROMPTRUN_API_KEY!,
     });
 
-    // Set up auto-updating prompt
     this.pollingPrompt = await promptrun.prompt({
       projectId,
-      poll: 30000, // Update every 30 seconds
+      poll: 30000,
       onChange: (changeEvent) => {
         console.log(
           `System prompt updated to version ${changeEvent.prompt.version}`
         );
 
-        // Update model if it changed
         if (
           changeEvent.changes.temperature ||
           changeEvent.prompt.model.model !==
@@ -97,7 +93,6 @@ class AutoUpdatingChatBot {
   }
 
   async chat(userMessage: string) {
-    // Always use the latest prompt version
     const { text } = await generateText({
       model: this.model,
       messages: [
@@ -117,17 +112,12 @@ class AutoUpdatingChatBot {
   }
 }
 
-// Usage
 const bot = new AutoUpdatingChatBot();
 await bot.initialize("YOUR_PROJECT_ID");
 
 const response = await bot.chat("Hello! Who are you?");
 console.log("Bot:", response);
 
-// The bot will automatically use updated prompts from your dashboard
-// without needing to restart or redeploy
-
-// Graceful shutdown
 process.on("SIGINT", () => bot.shutdown());
 ```
 
@@ -143,10 +133,9 @@ const promptrun = new PromptrunSDK({
 });
 
 async function setupSSE() {
-  // Use SSE for real-time updates (no polling interval needed)
   const ssePrompt = await promptrun.prompt({
     projectId: "YOUR_PROJECT_ID",
-    poll: "sse", // Enable Server-Sent Events
+    poll: "sse",
     onChange: (changeEvent) => {
       console.log("Real-time update via SSE:", {
         newVersion: changeEvent.prompt.version,
@@ -154,7 +143,6 @@ async function setupSSE() {
         changes: changeEvent.changes,
       });
 
-      // Instant updates when prompts change on the server
       console.log("New prompt content:", changeEvent.prompt.prompt);
     },
     onPollingError: (error) => {
@@ -186,10 +174,9 @@ const promptrun = new PromptrunSDK({
 async function setupEventListeners() {
   const pollingPrompt = await promptrun.prompt({
     projectId: "YOUR_PROJECT_ID",
-    poll: 10000, // Poll every 10 seconds
+    poll: 10000,
   });
 
-  // Add event listeners
   pollingPrompt.on("change", (changeEvent) => {
     console.log("Change detected via event listener:");
     console.log("- Version:", changeEvent.prompt.version);
@@ -204,27 +191,23 @@ async function setupEventListeners() {
     });
   });
 
-  // One-time listeners (automatically removed after first event)
   pollingPrompt.once("change", (changeEvent) => {
     console.log("First change detected:", changeEvent.prompt.version);
   });
 
-  // Store handlers for later removal
   const specificErrorHandler = (error) => {
     console.log("Specific error handler:", error.message);
   };
 
   pollingPrompt.on("error", specificErrorHandler);
 
-  // Later: remove specific handler
   setTimeout(() => {
     pollingPrompt.off("error", specificErrorHandler);
     console.log("Specific error handler removed");
   }, 60000);
 
-  // Remove all listeners for an event
   setTimeout(() => {
-    pollingPrompt.off("change"); // Removes all change listeners
+    pollingPrompt.off("change");
     console.log("All change listeners removed");
   }, 120000);
 
@@ -257,7 +240,6 @@ async function monitorPolling() {
     },
   });
 
-  // Check status periodically
   setInterval(() => {
     const status = pollingPrompt.getStatus();
 
@@ -270,7 +252,7 @@ async function monitorPolling() {
         ? new Date(status.lastSuccessfulFetch).toLocaleString()
         : "Never",
     });
-  }, 60000); // Check every minute
+  }, 60000);
 
   return pollingPrompt;
 }
@@ -294,13 +276,12 @@ const promptrun = new PromptrunSDK({
 async function advancedPolling() {
   const pollingPrompt = await promptrun.prompt({
     projectId: "YOUR_PROJECT_ID",
-    poll: 5000, // Poll every 5 seconds (minimum allowed)
-    enforceMinimumInterval: true, // Enforce 5-second minimum (default: true)
+    poll: 5000,
+    enforceMinimumInterval: true,
 
-    // Advanced error handling
     onPollingError: (error) => {
       console.log("Detailed error information:", {
-        type: error.type, // 'rate_limit', 'authentication', 'network', 'api', 'unknown'
+        type: error.type,
         message: error.message,
         consecutiveErrors: error.consecutiveErrors,
         backoffMultiplier: error.backoffMultiplier,
@@ -308,7 +289,6 @@ async function advancedPolling() {
         projectId: error.projectId,
       });
 
-      // Handle different error types
       switch (error.type) {
         case "rate_limit":
           console.log("Rate limited - polling will slow down automatically");
@@ -316,7 +296,6 @@ async function advancedPolling() {
           break;
         case "authentication":
           console.log("Authentication failed - check your API key");
-          // Consider stopping polling or refreshing credentials
           break;
         case "network":
           console.log("Network error - will retry with backoff");
@@ -354,23 +333,20 @@ async function environmentAwarePolling(projectId: string) {
   let pollConfig;
 
   if (isDevelopment) {
-    // Aggressive polling for development
     pollConfig = {
-      poll: 5000, // 5 seconds
-      enforceMinimumInterval: false, // Allow faster polling
+      poll: 5000,
+      enforceMinimumInterval: false,
     };
     console.log("Using development polling (5s)");
   } else if (isProduction) {
-    // Conservative polling for production
     pollConfig = {
-      poll: 60000, // 1 minute
+      poll: 60000,
       enforceMinimumInterval: true,
     };
     console.log("Using production polling (60s)");
   } else {
-    // Default for staging/testing
     pollConfig = {
-      poll: 30000, // 30 seconds
+      poll: 30000,
       enforceMinimumInterval: true,
     };
     console.log("Using default polling (30s)");
@@ -390,7 +366,6 @@ async function environmentAwarePolling(projectId: string) {
   return pollingPrompt;
 }
 
-// Usage
 const pollingPrompt = await environmentAwarePolling("YOUR_PROJECT_ID");
 ```
 
@@ -414,7 +389,6 @@ async function detailedChangeHandling() {
       console.log("Current prompt:", changeEvent.prompt);
       console.log("Previous prompt:", changeEvent.previousPrompt);
 
-      // Check what specifically changed
       const { changes } = changeEvent;
 
       if (changes.version) {
@@ -492,7 +466,6 @@ class ProductionChatService {
             changes: Object.keys(changeEvent.changes),
           });
 
-          // Update model if needed
           if (
             changeEvent.prompt.model.model !==
             changeEvent.previousPrompt.model.model
@@ -501,7 +474,6 @@ class ProductionChatService {
             console.log("Model updated to:", changeEvent.prompt.model.model);
           }
 
-          // Log significant changes
           if (changeEvent.changes.content) {
             console.log(
               "Prompt content updated - new conversations will use updated prompt"
@@ -516,12 +488,10 @@ class ProductionChatService {
             consecutiveErrors: error.consecutiveErrors,
           });
 
-          // Alert on persistent errors
           if (error.consecutiveErrors >= 5) {
             console.error(
               "ALERT: Multiple consecutive polling errors detected"
             );
-            // In production, you might want to send alerts to monitoring systems
           }
         },
       });
@@ -577,20 +547,15 @@ class ProductionChatService {
   }
 }
 
-// Usage
 const chatService = new ProductionChatService("YOUR_PROJECT_ID");
 
-// Initialize the service
 await chatService.initialize();
 
-// Use the service
 const response = await chatService.chat("Hello! How can you help me?");
 console.log("Response:", response);
 
-// Monitor status
 console.log("Service status:", chatService.getStatus());
 
-// Graceful shutdown
 process.on("SIGINT", async () => {
   console.log("Shutting down gracefully...");
   await chatService.shutdown();
@@ -673,7 +638,11 @@ interface PromptrunPromptChangeEvent {
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Mastra Integration" icon="robot" href="/apis/sdk/mastra-integration">
+  <Card
+    title="Mastra Integration"
+    icon="robot"
+    href="/apis/sdk/mastra-integration"
+  >
     Build AI agents with auto-updating instructions
   </Card>
   <Card
