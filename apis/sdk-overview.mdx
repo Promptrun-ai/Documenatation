@@ -99,8 +99,6 @@ You'll need a Promptrun API key to use the SDK. Get yours from the [Promptrun da
 ```typescript
 const promptrun = new PromptrunSDK({
   apiKey: process.env.PROMPTRUN_API_KEY!,
-  baseURL: "https://api.promptrun.ai",
-  headers: {},
 });
 ```
 
@@ -117,8 +115,8 @@ interface PromptrunSDKOptions {
 **Parameters:**
 
 - `apiKey` (string, required): Your Promptrun API key
-- `baseURL` (string, optional): Custom API base URL
-- `headers` (object, optional): Additional headers as key-value pairs
+- `baseURL` (string, optional): Custom API base URL (for development or custom servers)
+- `headers` (object, optional): Additional headers as key-value pairs (for custom authentication)
 
 <Tip>
   Store your API key in environment variables for security. Never commit API
