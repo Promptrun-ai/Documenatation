@@ -1,0 +1,302 @@
+---
+title: "Promptrun AI SDK"
+description: "The official Node.js SDK for seamless integration with Promptrun's dynamic prompt management platform."
+icon: "code"
+---
+
+## Overview
+
+The Promptrun AI SDK provides a powerful bridge between your application and the Promptrun platform, designed for first-class integration with the **Vercel AI SDK**. It enables dynamic prompt management, versioning, performance caching, real-time updates, and robust error handling in your AI applications.
+
+<CardGroup cols={2}>
+  <Card
+    title="Vercel AI Integration"
+    icon="bolt"
+    href="/apis/sdk/vercel-integration"
+  >
+    Use the SDK directly with generateText, streamText, and other Vercel AI SDK
+    helpers
+  </Card>
+  <Card
+    title="Dynamic Prompts"
+    icon="arrows-rotate"
+    href="/apis/sdk/dynamic-prompts"
+  >
+    Fetch and manage prompts from your dashboard with real-time updates
+  </Card>
+  <Card
+    title="Real-time Updates"
+    icon="broadcast-tower"
+    href="/apis/sdk/realtime-updates"
+  >
+    Event-driven architecture with polling and Server-Sent Events support
+  </Card>
+  <Card
+    title="Mastra Integration"
+    icon="robot"
+    href="/apis/sdk/mastra-integration"
+  >
+    Build AI agents with auto-updating instructions
+  </Card>
+</CardGroup>
+
+## Key Features
+
+- **🚀 Seamless Vercel AI SDK Integration**: Drop-in replacement for OpenAI and other providers
+- **🔄 Dynamic Prompt Management**: Update prompts without redeploying your application
+- **⚡ Real-time Updates**: Polling and Server-Sent Events for instant prompt updates
+- **🎯 Event-driven Architecture**: React to prompt changes with callbacks and event listeners
+- **⚡ Performance Caching**: Built-in caching reduces latency and costs
+- **🛡️ Robust Error Handling**: Comprehensive error classes for graceful failure handling
+- **📡 Streaming First**: Full support for streaming responses
+- **🔷 Fully Typed**: Complete TypeScript support for excellent developer experience
+
+## Quick Installation
+
+Install the SDK using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install @promptrun-ai/sdk
+```
+
+```bash yarn
+yarn add @promptrun-ai/sdk
+```
+
+```bash pnpm
+pnpm add @promptrun-ai/sdk
+```
+
+</CodeGroup>
+
+## Basic Usage
+
+Get started with just a few lines of code:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+const model = promptrun.model("openai/gpt-4o");
+
+const { text } = await generateText({
+  model,
+  prompt: "Tell me a short story about a robot who learns to paint.",
+});
+
+console.log(text);
+```
+
+## Authentication
+
+You'll need a Promptrun API key to use the SDK. Get yours from the [Promptrun dashboard](https://app.promptrun.ai).
+
+```typescript
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+  baseURL: "https://api.promptrun.ai",
+  headers: {},
+});
+```
+
+### PromptrunSDKOptions Interface
+
+```typescript
+interface PromptrunSDKOptions {
+  apiKey: string;
+  baseURL?: string;
+  headers?: { [key: string]: string };
+}
+```
+
+**Parameters:**
+
+- `apiKey` (string, required): Your Promptrun API key
+- `baseURL` (string, optional): Custom API base URL
+- `headers` (object, optional): Additional headers as key-value pairs
+
+<Tip>
+  Store your API key in environment variables for security. Never commit API
+  keys to your repository.
+</Tip>
+
+## Supported Models
+
+The SDK supports all models available through Promptrun, including:
+
+- **OpenAI**: `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/gpt-3.5-turbo`
+- **Anthropic**: `anthropic/claude-3.5-haiku`, `anthropic/claude-3.5-sonnet`
+- **Google**: `google/gemini-1.5-pro`, `google/gemini-1.5-flash`
+- **Meta**: `meta/llama-3.1-8b`, `meta/llama-3.1-70b`
+
+For the complete list of supported models and pricing, visit: [Models](https://docs.promptrun.ai/models)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Vercel AI Integration"
+    icon="arrow-right"
+    href="/apis/sdk/vercel-integration"
+  >
+    Learn how to use the SDK with generateText, streamText, and other Vercel AI
+    helpers
+  </Card>
+  <Card
+    title="Dynamic Prompts"
+    icon="arrow-right"
+    href="/apis/sdk/dynamic-prompts"
+  >
+    Discover how to fetch and manage prompts from your dashboard
+  </Card>
+  <Card
+    title="Real-time Updates"
+    icon="arrow-right"
+    href="/apis/sdk/realtime-updates"
+  >
+    Set up polling and Server-Sent Events for live prompt updates
+  </Card>
+  <Card
+    title="Error Handling"
+    icon="arrow-right"
+    href="/apis/sdk/error-handling"
+  >
+    Build resilient applications with proper error handling
+  </Card>
+</CardGroup>
+
+## Example Applications
+
+The SDK is perfect for building:
+
+- **Chatbots and Virtual Assistants** with dynamic personalities
+- **Content Generation Tools** with evolving templates
+- **AI-powered APIs** that adapt without downtime
+- **Multi-agent Systems** with specialized roles
+- **Interactive Applications** with streaming responses
+
+## API Reference
+
+### PromptrunSDK Class
+
+#### Constructor
+
+```typescript
+new PromptrunSDK(options: PromptrunSDKOptions)
+```
+
+**Returns:** `PromptrunSDK` instance
+
+#### Methods
+
+##### model(modelId, options?)
+
+Creates a language model instance compatible with Vercel AI SDK.
+
+```typescript
+model(modelId: string, options?: PromptrunLanguageModelOptions): LanguageModel
+```
+
+**Parameters:**
+
+- `modelId` (string): Model identifier (e.g., "openai/gpt-4o")
+- `options` (PromptrunLanguageModelOptions, optional): Model configuration
+
+**Returns:** `LanguageModel` - Compatible with Vercel AI SDK
+
+##### prompt(options)
+
+Fetches prompts with optional polling for real-time updates.
+
+```typescript
+prompt(options: PromptrunPromptOptions): Promise<PromptrunPrompt | PromptrunPollingPrompt>
+```
+
+**Parameters:**
+
+- `options` (PromptrunPromptOptions): Configuration for prompt fetching
+
+**Returns:** `Promise<PromptrunPrompt | PromptrunPollingPrompt>`
+
+### Interfaces
+
+#### PromptrunPromptOptions
+
+```typescript
+interface PromptrunPromptOptions {
+  projectId: string;
+  poll?: number | "sse";
+  version?: string;
+  tag?: string;
+  onChange?: (event: PromptrunPromptChangeEvent) => void;
+  onPollingError?: (error: PromptrunPollingError) => void;
+  enforceMinimumInterval?: boolean;
+}
+```
+
+**Parameters:**
+
+- `projectId` (string, required): Your project ID
+- `poll` (number | "sse", optional): Polling interval in ms, "sse", or 0 to disable
+- `version` (string, optional): Specific version to fetch
+- `tag` (string, optional): Specific tag to fetch
+- `onChange` (function, optional): Change callback
+- `onPollingError` (function, optional): Error callback
+- `enforceMinimumInterval` (boolean, optional): Enforce 5-second minimum interval
+
+#### PromptrunPrompt
+
+```typescript
+interface PromptrunPrompt {
+  id: string;
+  projectId: string;
+  version: number;
+  prompt: string;
+  temperature: number;
+  tag: string | null;
+  model: {
+    model: string;
+    provider: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### PromptrunLanguageModelOptions
+
+```typescript
+interface PromptrunLanguageModelOptions {
+  cache?: {
+    id: string;
+  };
+}
+```
+
+**Parameters:**
+
+- `cache` (object, optional): Caching configuration
+- `cache.id` (string): Unique identifier for the prompt cache
+
+## Community and Support
+
+<CardGroup cols={3}>
+  <Card
+    title="GitHub Repository"
+    icon="github"
+    href="https://github.com/Promptrun-ai/promptrun-ai-sdk"
+  >
+    View source code, report issues, and contribute
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="https://app.promptrun.ai">
+    Manage your prompts and monitor usage
+  </Card>
+  <Card title="Contact Support" icon="envelope" href="mailto:info@promptrun.ai">
+    Get help from our team
+  </Card>
+</CardGroup>

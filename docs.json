@@ -19,7 +19,7 @@
           },
           {
             "group": "Core Features",
-            "pages": ["apis/streaming-ai"]
+            "pages": ["apis/streaming-ai", "apis/sdk-overview"]
           }
         ]
       },

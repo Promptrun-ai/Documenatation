@@ -1,0 +1,711 @@
+---
+title: "Real-time Updates"
+description: "Set up polling and Server-Sent Events for automatic prompt updates without redeploying your application."
+icon: "broadcast-tower"
+---
+
+## Overview
+
+One of the most powerful features of the Promptrun SDK is its ability to automatically update prompts in real-time. This means you can change prompts in your dashboard and have them immediately take effect in your running applications without any code changes or redeployments.
+
+## Polling for Updates
+
+### Basic Polling Setup
+
+Enable polling by setting a polling interval in milliseconds:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function setupPolling() {
+  // Enable polling (checks for updates every 30 seconds)
+  const pollingPrompt = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: 30000, // Poll every 30 seconds
+    onChange: (changeEvent) => {
+      console.log("Prompt updated!", {
+        newVersion: changeEvent.prompt.version,
+        previousVersion: changeEvent.previousPrompt.version,
+        changes: changeEvent.changes,
+      });
+
+      // Handle specific changes
+      if (changeEvent.changes.content) {
+        console.log(
+          "Content changed from:",
+          changeEvent.changes.content.from,
+          "to:",
+          changeEvent.changes.content.to
+        );
+      }
+    },
+  });
+
+  console.log("Initial prompt:", pollingPrompt.prompt);
+  console.log("Polling active:", pollingPrompt.isPolling);
+
+  return pollingPrompt;
+}
+
+setupPolling();
+```
+
+### Auto-updating Chat Bot
+
+Create a chat bot that automatically uses the latest prompts:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+class AutoUpdatingChatBot {
+  private pollingPrompt: any;
+  private model: any;
+
+  async initialize(projectId: string) {
+    const promptrun = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    // Set up auto-updating prompt
+    this.pollingPrompt = await promptrun.prompt({
+      projectId,
+      poll: 30000, // Update every 30 seconds
+      onChange: (changeEvent) => {
+        console.log(
+          `System prompt updated to version ${changeEvent.prompt.version}`
+        );
+
+        // Update model if it changed
+        if (
+          changeEvent.changes.temperature ||
+          changeEvent.prompt.model.model !==
+            changeEvent.previousPrompt.model.model
+        ) {
+          this.model = promptrun.model(changeEvent.prompt.model.model);
+          console.log("Model updated to:", changeEvent.prompt.model.model);
+        }
+      },
+    });
+
+    this.model = promptrun.model(this.pollingPrompt.model.model);
+    console.log("Chat bot initialized with auto-updating prompts");
+  }
+
+  async chat(userMessage: string) {
+    // Always use the latest prompt version
+    const { text } = await generateText({
+      model: this.model,
+      messages: [
+        { role: "system", content: this.pollingPrompt.prompt },
+        { role: "user", content: userMessage },
+      ],
+    });
+
+    return text;
+  }
+
+  shutdown() {
+    if (this.pollingPrompt) {
+      this.pollingPrompt.stopPolling();
+      console.log("Chat bot polling stopped");
+    }
+  }
+}
+
+// Usage
+const bot = new AutoUpdatingChatBot();
+await bot.initialize("YOUR_PROJECT_ID");
+
+const response = await bot.chat("Hello! Who are you?");
+console.log("Bot:", response);
+
+// The bot will automatically use updated prompts from your dashboard
+// without needing to restart or redeploy
+
+// Graceful shutdown
+process.on("SIGINT", () => bot.shutdown());
+```
+
+## Server-Sent Events (SSE)
+
+For ultra-low latency updates, use Server-Sent Events instead of polling:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function setupSSE() {
+  // Use SSE for real-time updates (no polling interval needed)
+  const ssePrompt = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: "sse", // Enable Server-Sent Events
+    onChange: (changeEvent) => {
+      console.log("Real-time update via SSE:", {
+        newVersion: changeEvent.prompt.version,
+        timestamp: new Date().toISOString(),
+        changes: changeEvent.changes,
+      });
+
+      // Instant updates when prompts change on the server
+      console.log("New prompt content:", changeEvent.prompt.prompt);
+    },
+    onPollingError: (error) => {
+      console.error("SSE connection error:", error.message);
+      console.log("Will attempt to reconnect...");
+    },
+  });
+
+  console.log("SSE connection active:", ssePrompt.isPolling);
+  console.log("Initial prompt:", ssePrompt.prompt);
+
+  return ssePrompt;
+}
+
+setupSSE();
+```
+
+## Event Listeners
+
+For more fine-grained control, use event listeners:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function setupEventListeners() {
+  const pollingPrompt = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: 10000, // Poll every 10 seconds
+  });
+
+  // Add event listeners
+  pollingPrompt.on("change", (changeEvent) => {
+    console.log("Change detected via event listener:");
+    console.log("- Version:", changeEvent.prompt.version);
+    console.log("- Changes:", Object.keys(changeEvent.changes));
+  });
+
+  pollingPrompt.on("error", (pollingError) => {
+    console.error("Polling error via event listener:", {
+      type: pollingError.type,
+      message: pollingError.message,
+      consecutiveErrors: pollingError.consecutiveErrors,
+    });
+  });
+
+  // One-time listeners (automatically removed after first event)
+  pollingPrompt.once("change", (changeEvent) => {
+    console.log("First change detected:", changeEvent.prompt.version);
+  });
+
+  // Store handlers for later removal
+  const specificErrorHandler = (error) => {
+    console.log("Specific error handler:", error.message);
+  };
+
+  pollingPrompt.on("error", specificErrorHandler);
+
+  // Later: remove specific handler
+  setTimeout(() => {
+    pollingPrompt.off("error", specificErrorHandler);
+    console.log("Specific error handler removed");
+  }, 60000);
+
+  // Remove all listeners for an event
+  setTimeout(() => {
+    pollingPrompt.off("change"); // Removes all change listeners
+    console.log("All change listeners removed");
+  }, 120000);
+
+  return pollingPrompt;
+}
+
+setupEventListeners();
+```
+
+## Polling Status and Monitoring
+
+Monitor the status of your polling operations:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function monitorPolling() {
+  const pollingPrompt = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: 15000,
+    onChange: (changeEvent) => {
+      console.log("Prompt changed:", changeEvent.prompt.version);
+    },
+    onPollingError: (error) => {
+      console.error("Polling error:", error.message);
+    },
+  });
+
+  // Check status periodically
+  setInterval(() => {
+    const status = pollingPrompt.getStatus();
+
+    console.log("Polling Status:", {
+      isPolling: status.isPolling,
+      currentInterval: status.currentInterval,
+      consecutiveErrors: status.consecutiveErrors,
+      lastError: status.lastError?.message,
+      lastSuccessfulFetch: status.lastSuccessfulFetch
+        ? new Date(status.lastSuccessfulFetch).toLocaleString()
+        : "Never",
+    });
+  }, 60000); // Check every minute
+
+  return pollingPrompt;
+}
+
+monitorPolling();
+```
+
+## Advanced Polling Configuration
+
+### Intelligent Backoff and Error Handling
+
+The SDK includes intelligent backoff for different error types:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function advancedPolling() {
+  const pollingPrompt = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: 5000, // Poll every 5 seconds (minimum allowed)
+    enforceMinimumInterval: true, // Enforce 5-second minimum (default: true)
+
+    // Advanced error handling
+    onPollingError: (error) => {
+      console.log("Detailed error information:", {
+        type: error.type, // 'rate_limit', 'authentication', 'network', 'api', 'unknown'
+        message: error.message,
+        consecutiveErrors: error.consecutiveErrors,
+        backoffMultiplier: error.backoffMultiplier,
+        statusCode: error.statusCode,
+        projectId: error.projectId,
+      });
+
+      // Handle different error types
+      switch (error.type) {
+        case "rate_limit":
+          console.log("Rate limited - polling will slow down automatically");
+          console.log(`Next attempt in ${error.backoffMultiplier * 5000}ms`);
+          break;
+        case "authentication":
+          console.log("Authentication failed - check your API key");
+          // Consider stopping polling or refreshing credentials
+          break;
+        case "network":
+          console.log("Network error - will retry with backoff");
+          break;
+        case "api":
+          console.log("API error - server might be temporarily unavailable");
+          break;
+        default:
+          console.log("Unknown error - monitoring will continue");
+      }
+    },
+  });
+
+  return pollingPrompt;
+}
+
+advancedPolling();
+```
+
+### Development vs Production Polling
+
+Use different polling strategies for different environments:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function environmentAwarePolling(projectId: string) {
+  const isDevelopment = process.env.NODE_ENV === "development";
+  const isProduction = process.env.NODE_ENV === "production";
+
+  let pollConfig;
+
+  if (isDevelopment) {
+    // Aggressive polling for development
+    pollConfig = {
+      poll: 5000, // 5 seconds
+      enforceMinimumInterval: false, // Allow faster polling
+    };
+    console.log("Using development polling (5s)");
+  } else if (isProduction) {
+    // Conservative polling for production
+    pollConfig = {
+      poll: 60000, // 1 minute
+      enforceMinimumInterval: true,
+    };
+    console.log("Using production polling (60s)");
+  } else {
+    // Default for staging/testing
+    pollConfig = {
+      poll: 30000, // 30 seconds
+      enforceMinimumInterval: true,
+    };
+    console.log("Using default polling (30s)");
+  }
+
+  const pollingPrompt = await promptrun.prompt({
+    projectId,
+    ...pollConfig,
+    onChange: (changeEvent) => {
+      console.log(
+        `[${process.env.NODE_ENV}] Prompt updated:`,
+        changeEvent.prompt.version
+      );
+    },
+  });
+
+  return pollingPrompt;
+}
+
+// Usage
+const pollingPrompt = await environmentAwarePolling("YOUR_PROJECT_ID");
+```
+
+## Change Event Details
+
+Understanding what changed in your prompts:
+
+```typescript
+import { PromptrunSDK } from "@promptrun-ai/sdk";
+
+const promptrun = new PromptrunSDK({
+  apiKey: process.env.PROMPTRUN_API_KEY!,
+});
+
+async function detailedChangeHandling() {
+  const pollingPrompt = await promptrun.prompt({
+    projectId: "YOUR_PROJECT_ID",
+    poll: 30000,
+    onChange: (changeEvent) => {
+      console.log("=== Prompt Change Detected ===");
+      console.log("Current prompt:", changeEvent.prompt);
+      console.log("Previous prompt:", changeEvent.previousPrompt);
+
+      // Check what specifically changed
+      const { changes } = changeEvent;
+
+      if (changes.version) {
+        console.log(
+          `📋 Version: ${changes.version.from} → ${changes.version.to}`
+        );
+      }
+
+      if (changes.content) {
+        console.log("📝 Content changed:");
+        console.log(`  From: "${changes.content.from.substring(0, 50)}..."`);
+        console.log(`  To: "${changes.content.to.substring(0, 50)}..."`);
+      }
+
+      if (changes.temperature) {
+        console.log(
+          `🌡️ Temperature: ${changes.temperature.from} → ${changes.temperature.to}`
+        );
+      }
+
+      if (changes.tag) {
+        console.log(
+          `🏷️ Tag: ${changes.tag.from || "none"} → ${changes.tag.to || "none"}`
+        );
+      }
+
+      if (changes.updatedAt) {
+        const fromDate = new Date(changes.updatedAt.from).toLocaleString();
+        const toDate = new Date(changes.updatedAt.to).toLocaleString();
+        console.log(`⏰ Updated: ${fromDate} → ${toDate}`);
+      }
+
+      console.log("================================");
+    },
+  });
+
+  return pollingPrompt;
+}
+
+detailedChangeHandling();
+```
+
+## Production-Ready Implementation
+
+A complete example for production applications:
+
+```typescript
+import { generateText } from "ai";
+import { PromptrunSDK, PromptrunPollingPrompt } from "@promptrun-ai/sdk";
+
+class ProductionChatService {
+  private pollingPrompt: PromptrunPollingPrompt | null = null;
+  private model: any;
+  private isInitialized = false;
+  private readonly projectId: string;
+
+  constructor(projectId: string) {
+    this.projectId = projectId;
+  }
+
+  async initialize() {
+    const promptrun = new PromptrunSDK({
+      apiKey: process.env.PROMPTRUN_API_KEY!,
+    });
+
+    try {
+      this.pollingPrompt = await promptrun.prompt({
+        projectId: this.projectId,
+        poll: process.env.NODE_ENV === "production" ? 60000 : 30000,
+        tag: process.env.NODE_ENV === "production" ? "production" : "staging",
+
+        onChange: (changeEvent) => {
+          console.log(`[${new Date().toISOString()}] Prompt updated:`, {
+            version: changeEvent.prompt.version,
+            changes: Object.keys(changeEvent.changes),
+          });
+
+          // Update model if needed
+          if (
+            changeEvent.prompt.model.model !==
+            changeEvent.previousPrompt.model.model
+          ) {
+            this.model = promptrun.model(changeEvent.prompt.model.model);
+            console.log("Model updated to:", changeEvent.prompt.model.model);
+          }
+
+          // Log significant changes
+          if (changeEvent.changes.content) {
+            console.log(
+              "Prompt content updated - new conversations will use updated prompt"
+            );
+          }
+        },
+
+        onPollingError: (error) => {
+          console.error(`[${new Date().toISOString()}] Polling error:`, {
+            type: error.type,
+            message: error.message,
+            consecutiveErrors: error.consecutiveErrors,
+          });
+
+          // Alert on persistent errors
+          if (error.consecutiveErrors >= 5) {
+            console.error(
+              "ALERT: Multiple consecutive polling errors detected"
+            );
+            // In production, you might want to send alerts to monitoring systems
+          }
+        },
+      });
+
+      this.model = promptrun.model(this.pollingPrompt.model.model);
+      this.isInitialized = true;
+
+      console.log(
+        `Chat service initialized with prompt version ${this.pollingPrompt.version}`
+      );
+    } catch (error) {
+      console.error("Failed to initialize chat service:", error);
+      throw error;
+    }
+  }
+
+  async chat(userMessage: string) {
+    if (!this.isInitialized || !this.pollingPrompt) {
+      throw new Error("Chat service not initialized");
+    }
+
+    try {
+      const { text } = await generateText({
+        model: this.model,
+        messages: [
+          { role: "system", content: this.pollingPrompt.prompt },
+          { role: "user", content: userMessage },
+        ],
+      });
+
+      return text;
+    } catch (error) {
+      console.error("Error generating response:", error);
+      throw error;
+    }
+  }
+
+  getStatus() {
+    return {
+      initialized: this.isInitialized,
+      polling: this.pollingPrompt?.isPolling || false,
+      currentVersion: this.pollingPrompt?.version,
+      pollingStatus: this.pollingPrompt?.getStatus(),
+    };
+  }
+
+  async shutdown() {
+    if (this.pollingPrompt) {
+      this.pollingPrompt.stopPolling();
+      console.log("Chat service polling stopped");
+    }
+    this.isInitialized = false;
+  }
+}
+
+// Usage
+const chatService = new ProductionChatService("YOUR_PROJECT_ID");
+
+// Initialize the service
+await chatService.initialize();
+
+// Use the service
+const response = await chatService.chat("Hello! How can you help me?");
+console.log("Response:", response);
+
+// Monitor status
+console.log("Service status:", chatService.getStatus());
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("Shutting down gracefully...");
+  await chatService.shutdown();
+  process.exit(0);
+});
+```
+
+## Best Practices
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+### ✅ Do
+
+- Use appropriate polling intervals for your environment
+- Implement proper error handling and monitoring
+- Use tags to separate environments (production, staging, dev)
+- Monitor polling status in production applications
+- Implement graceful shutdown procedures
+- Cache prompts locally when appropriate
+
+### ❌ Don't
+
+- Use overly aggressive polling intervals in production
+- Ignore polling errors or consecutive failures
+- Mix production and development polling configurations
+- Forget to stop polling when shutting down applications
+- Rely solely on real-time updates without fallbacks
+
+</div>
+
+## API Reference
+
+### Polling Configuration
+
+```typescript
+interface PollingOptions {
+  poll: number | "sse";
+  onChange?: (event: PromptrunPromptChangeEvent) => void;
+  onPollingError?: (error: PromptrunPollingError) => void;
+  enforceMinimumInterval?: boolean;
+}
+```
+
+**Parameters:**
+
+- `poll` (number | "sse"): Polling interval in ms or "sse" for Server-Sent Events
+- `onChange` (function, optional): Callback fired when prompt changes
+- `onPollingError` (function, optional): Callback fired on polling errors
+- `enforceMinimumInterval` (boolean, optional): Enforce 5-second minimum interval
+
+### PromptrunPollingPrompt Interface
+
+```typescript
+interface PromptrunPollingPrompt extends PromptrunPrompt {
+  isPolling: boolean;
+  stopPolling(): void;
+  getStatus(): PromptrunPollingStatus;
+  on(event: "change" | "error", handler: Function): void;
+  off(event: "change" | "error", handler?: Function): void;
+  once(event: "change" | "error", handler: Function): void;
+}
+```
+
+### PromptrunPromptChangeEvent Interface
+
+```typescript
+interface PromptrunPromptChangeEvent {
+  prompt: PromptrunPrompt;
+  previousPrompt: PromptrunPrompt;
+  changes: {
+    version?: { from: number; to: number };
+    content?: { from: string; to: string };
+    temperature?: { from: number; to: number };
+    tag?: { from: string | null; to: string | null };
+    updatedAt?: { from: string; to: string };
+  };
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Mastra Integration" icon="robot" href="/apis/sdk/mastra-integration">
+    Build AI agents with auto-updating instructions
+  </Card>
+  <Card
+    title="Error Handling"
+    icon="shield-exclamation"
+    href="/apis/sdk/error-handling"
+  >
+    Implement robust error handling for production applications
+  </Card>
+  <Card
+    title="Dynamic Prompts"
+    icon="arrows-rotate"
+    href="/apis/sdk/dynamic-prompts"
+  >
+    Learn more about managing prompts from your dashboard
+  </Card>
+  <Card
+    title="Vercel AI Integration"
+    icon="bolt"
+    href="/apis/sdk/vercel-integration"
+  >
+    Use real-time prompts with generateText and streamText
+  </Card>
+</CardGroup>
+
+<Tip>
+  **SSE vs Polling**: Use Server-Sent Events for the fastest updates, but
+  fallback to polling if your infrastructure doesn't support persistent
+  connections.
+</Tip>
+
+<Warning>
+  **Rate Limits**: Be mindful of API rate limits. The SDK includes intelligent
+  backoff, but very aggressive polling can still cause issues.
+</Warning>{" "}
