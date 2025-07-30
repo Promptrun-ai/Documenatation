@@ -1,33 +1,63 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: "Introduction"
+description: "Complete API reference for Promptrun.ai endpoints"
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+## Overview
 
-## Welcome
+Welcome to the Promptrun.ai API reference. This documentation provides comprehensive information about all available endpoints, authentication methods, and response formats for integrating with Promptrun.ai.
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
+Promptrun.ai offers a unified API for managing prompts, executing AI models, and building LLM-powered applications. Our API is designed to be simple, consistent, and compatible with popular AI providers.
 
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+## Base URL
+
+All API requests should be made to:
+
+```bash
+https://api.promptrun.ai/v1
+```
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+All API endpoints require authentication using Bearer tokens. Include your API key in the Authorization header:
 
-```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
+```bash
+Authorization: Bearer <YOUR_API_KEY>
 ```
+
+You can find or create your API key in the [Promptrun dashboard](https://app.promptrun.ai).
+
+## Rate Limits
+
+API requests are subject to rate limiting based on your plan:
+
+- **Free Tier**: 100 requests per minute
+- **Pro Tier**: 1,000 requests per minute
+- **Enterprise**: Custom limits
+
+Rate limit headers are included in all responses:
+
+```bash
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1640995200
+```
+
+## SDKs and Libraries
+
+We provide official SDKs for popular programming languages:
+
+- [JavaScript/TypeScript](https://github.com/promptrun-ai/promptrun-js) - Coming Soon
+- Python - Coming Soon
+- PHP - Coming Soon
+- Java - Coming Soon
+- Ruby - Coming Soon
+- C# - Coming Soon
+
+## Support
+
+Need help integrating with our API? We're here to help:
+
+- [Documentation](/) - Complete guides and examples
+- [Discord Community](https://discord.gg/GtrW5gCdng) - Get help from the community
+- [Email Support](mailto:support@promptrun.ai) - Direct support for complex issues

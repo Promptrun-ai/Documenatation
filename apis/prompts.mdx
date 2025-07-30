@@ -1,0 +1,93 @@
+---
+title: "Prompt API"
+description: "Retrieve a specific prompt version or tagged release from a project via the Promptrun API."
+icon: "cloud"
+---
+
+## Overview
+
+Use this endpoint to retrieve the contents of a prompt template from a specific project, either by version number or by tag. This is useful if you want to render the prompt locally, inspect its structure, or execute it manually with your own runtime.
+
+---
+
+## Endpoint
+
+```http
+GET https://api.promptrun.ai/v1/prompt
+```
+
+---
+
+## Query Parameters
+
+| Param       | Type     | Required | Description                               |
+| ----------- | -------- | -------- | ----------------------------------------- |
+| `projectId` | `string` | ✅ Yes   | The UUID of the project                   |
+| `version`   | `number` | ❌ Yes\* | The specific version number of the prompt |
+| `tag`       | `string` | ❌ Yes\* | A named alias like `"prod"` or `"dev"`    |
+
+> ⚠️ You must provide either `version` **or** `tag`, but **not both**.
+
+---
+
+## Example Request
+
+```bash
+curl -X GET "https://api.promptrun.ai/v1/prompt?projectId=abc123&tag=prod" \
+  -H "Authorization: Bearer <API_KEY>"
+```
+
+---
+
+## Example Response
+
+```json
+{
+  "updatedAt": "2025-07-21T04:17:39.294Z",
+  "prompt": "Generate {{word_count}} words essay about Georgian History.",
+  "version": 27,
+  "versionMessage": "I have updated system prompt to generate {{word_count}} words essay about Georgian History.",
+  "tag": "latest",
+  "project": {
+    "id": "d0d52c6e-85ba-4025-a84c-3c99834fe2ac",
+    "name": "Georgian History Essay Generator"
+  }
+}
+```
+
+---
+
+## Validation Logic
+
+If **both** `version` and `tag` are provided, the API will return:
+
+```json
+{
+  "error": "You must provide either `version` or `tag`, but not both."
+}
+```
+
+---
+
+## Use Cases
+
+- Fetch prompt content for rendering inside your app or chatbot
+- Validate prompt structure before executing it
+- Preview and compare different versions for auditing
+
+---
+
+## Error Codes
+
+| Code | Meaning                                 |
+| ---- | --------------------------------------- |
+| 400  | Both `version` and `tag` provided       |
+| 401  | Unauthorized or invalid API key         |
+| 404  | Project or prompt version/tag not found |
+
+---
+
+## Coming Soon
+
+- Ability to fetch schema alongside prompt
+- Support for fetching multiple prompt variants in batch
